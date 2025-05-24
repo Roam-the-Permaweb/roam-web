@@ -1,0 +1,198 @@
+/* src/styles/media-view.css */
+.media-image {
+  cursor: zoom-in;
+  max-width: 100%;
+  height: auto;
+}
+
+.media-text {
+  white-space: pre-wrap;
+  overflow-y: auto;
+  max-height: 70vh;
+  padding: 1rem;
+  background: #0f0121;
+  border-radius: 0.25rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.media-embed-wrapper {
+  width: 100%;
+  height: 100%;
+  display: block;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+}
+
+.media-pdf,
+.media-iframe {
+  width: 100%;
+  height: 70vh;
+  border: none;
+  background-color: #0f0121;
+}
+
+.media-wrapper.wide {
+  max-width: none;
+  width: 100%;
+}
+
+
+.open-tab-btn {
+  position: absolute;
+  bottom: 4rem;
+  right: 2rem;
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  border: none;
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  z-index: 1000;
+}
+
+.open-tab-btn:hover {
+  background: rgba(0,0,0,0.8);
+}
+
+.media-actions {
+  display: flex;
+  justify-content: center;
+  gap: var(--gap);
+  padding: 10px;
+}
+
+.media-actions button {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 1rem;
+  font-weight: bold;
+  box-shadow: 0 4px 6px var(--shadow);
+  cursor: pointer;
+  transition: transform 0.1s ease, opacity 0.2s ease;
+  box-shadow: 0 2px 8px rgba(141, 141, 141, 0.3);
+  background: var(--bg-elevated, #1a1a1a);
+}
+
+.media-actions button:hover {
+  background: var(--bg-elevated-hover, #2a2a2a);
+}
+
+.media-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.media-container {
+  flex: 1 0 auto;
+}
+
+/* Parent container holding media and actions, centered and responsive */
+.media-view-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 90%;
+    max-height: 480px;
+    max-width: 800px;       /* cap on desktop */
+    margin: 0 auto;
+    overflow-y: auto;
+    padding-bottom: 0.5rem;
+  }
+  
+  /* Caps media height so details toggle and controls stay visible */
+  .media-wrapper {
+    width: 100%;
+    max-height: 70vh;
+    position: relative;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center; 
+  }
+  
+  /* Images and videos letterboxed to fit wrapper */
+  .media-element {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+  
+  /* Loading, error, and manual-load states centered in wrapper */
+  .media-loading,
+  .media-error,
+  .media-load-btn {
+    z-index: 1;
+    color: var(--accent);
+    padding: var(--gap);
+  }
+  
+  .media-load-btn {
+    background: #fafafa;
+    border: 2px dashed var(--accent);
+    border-radius: 0.5rem;
+    cursor: pointer;
+  }
+  
+  /* Details button below media, always visible */
+  .media-actions {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    z-index: 1;
+  }
+  
+  /* Ensure wrapper and actions stack correctly */
+  .media-view-container,
+  .media-wrapper,
+  .media-actions {
+    position: relative;
+    z-index: 10;
+  }
+  
+  .placeholder {
+    margin: 2rem;
+  }
+
+  /* Audio player full-width */
+  .media-audio {
+    width: 100%;
+    height: 80px;
+  }
+  
+  /* Video player full-width & height-constrained */
+  .media-video {
+    width: 100%;
+    max-height: 70vh;
+    object-fit: contain;
+  }
+
+  /* privacy toggle button */
+.privacy-toggle-btn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 50000;
+  background: rgba(0,0,0,0.4);
+  border: none;
+  color: #fff;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+}
+
+/* screen overlay */
+.privacy-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  /* half-opaque plus blur */
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(15px);
+  z-index: 4;
+}
