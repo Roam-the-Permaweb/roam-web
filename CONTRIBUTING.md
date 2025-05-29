@@ -97,7 +97,7 @@ Before submitting a PR:
 
 ## 📬 Feedback & Support
 
-- File an [issue](https://github.com/vilenarios/roam/issues)
+- File an [issue](https://github.com/Roam-the-Permaweb/roam-web/issues)
 - Ping us on X: [@RoamThePermaweb](https://x.com/RoamThePermaweb)
 - Want to build something with Roam? DM us or open a discussion!
 

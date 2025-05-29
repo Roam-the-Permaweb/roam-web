@@ -7,12 +7,14 @@ export type MediaType =
   | "music"
   | "websites"
   | "text"
-  | "everything";
+  | "everything"
+  | "arfs";
 export type Recency = "new" | "old";
 export interface Channel {
   media: MediaType;
   recency: Recency;
   ownerAddress?: string; // optional Arweave address filter
+  appName?: string; // optional App-Name filter
 }
 
 export const MEDIA_TYPES: MediaType[] = [
@@ -22,6 +24,7 @@ export const MEDIA_TYPES: MediaType[] = [
   "websites",
   "text",
   "everything",
+  "arfs",
 ];
 
 /**
@@ -41,6 +44,13 @@ export interface TxMeta {
   tags: { name: string; value: string }[];
   data: { size: number };
   block: { height: number; timestamp: number };
+  arfsMeta?: {
+    dataTxId: string;
+    name: string;
+    size: number;
+    contentType: string;
+    customTags: Record<string, string>;
+  };
 }
 
 // --------------------------------------------------------------------------
@@ -52,6 +62,7 @@ const BASE_CONTENT_TYPES: Record<Exclude<MediaType, "everything">, string[]> = {
   music: ["audio/mpeg", "audio/mp3", "audio/wav"],
   websites: ["application/x.arweave-manifest+json", "text/html"],
   text: ["text/markdown", "application/pdf"],
+  arfs: ["application/json"] // this ensures only public arfs files
 };
 
 // Build full map including "everything" as the union of all other arrays
@@ -59,7 +70,7 @@ export const CONTENT_TYPES: Record<MediaType, string[]> = {
   ...BASE_CONTENT_TYPES,
   everything: Object.values(BASE_CONTENT_TYPES).reduce<string[]>((acc, arr) => {
     arr.forEach((ct) => {
-      if (!acc.includes(ct)) acc.push(ct);
+      if (!acc.includes(ct) && ct !== 'application/json') acc.push(ct);
     });
     return acc;
   }, []),
