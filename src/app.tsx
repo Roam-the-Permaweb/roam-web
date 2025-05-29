@@ -4,7 +4,14 @@ import { MediaView } from './components/MediaView'
 import { DetailsDrawer } from './components/DetailsDrawer'
 import { ZoomOverlay } from './components/ZoomOverlay'
 import { Interstitial } from './components/Interstitial'
-import { BlockRangeSlider } from './components/BlockRangeSlider'
+import { ConsentModal } from './components/ConsentModal'
+import { AppHeader } from './components/AppHeader'
+import { AppControls } from './components/AppControls'
+import { TransactionInfo } from './components/TransactionInfo'
+import { MediaActions } from './components/MediaActions'
+import { AboutModal } from './components/AboutModal'
+import { AppFooter } from './components/AppFooter'
+import { ChannelsDrawer } from './components/ChannelsDrawer'
 import { useInterstitialInjector } from './hooks/useInterstitialInjector'
 import { useConsent } from './hooks/useConsent'
 import { useDeepLink } from './hooks/useDeepLink'
@@ -137,16 +144,7 @@ export function App() {
   return (
     <div className="app">
       {!consent.accepted && (
-        <div className="consent-backdrop">
-          <div className="consent-modal">
-            <h2>⚠️ Content Warning</h2>
-            <p>This app will show anything posted to Arweave - some of it may be sensitive or NSFW. Click at your own risk! You must be 18+ to continue.</p>
-            <div className="consent-actions">
-              <button className="consent-btn accept" onClick={consent.handleAccept}>I accept</button>
-              <button className="consent-btn reject" onClick={consent.handleReject}>Close app</button>
-            </div>
-          </div>
-        </div>
+        <ConsentModal onAccept={consent.handleAccept} onReject={consent.handleReject} />
       )}
       
       {/* Interstitial overlay */}
@@ -154,22 +152,20 @@ export function App() {
         <Interstitial src="/assets/static-ad.jpg" onClose={handleCloseAd} />
       )}
       
-      <header className="app-header">
-        <div className="banner">
-          <img src="/assets/banner.png" alt="Roam the Permaweb Banner" />
-        </div>
-      </header>
+      <AppHeader />
 
       {appState.zoomSrc && <ZoomOverlay src={appState.zoomSrc} onClose={() => appState.setZoomSrc(null)} />}
 
-      {/* Controls */}
-      <div className="controls">
-        <button className="btn reset-btn" onClick={navigation.handleReset} disabled={appState.loading}>🔄 Reset</button>
-        <button className="btn back-btn" onClick={navigation.handleBack} disabled={!appState.currentTx || appState.loading}>← Back</button>
-        <button className="btn channels-btn" onClick={appState.openChannels} title="Channels">⚙️</button>
-        <button className="btn next-btn" onClick={handleNext} disabled={appState.loading || appState.queueLoading}>Next →</button>
-        <button className="btn roam-btn" onClick={handleRoam} disabled={appState.loading || appState.queueLoading}>Roam 🎲</button>
-      </div>
+      <AppControls
+        onReset={navigation.handleReset}
+        onBack={navigation.handleBack}
+        onNext={handleNext}
+        onRoam={handleRoam}
+        onOpenChannels={appState.openChannels}
+        hasCurrentTx={!!appState.currentTx}
+        loading={appState.loading}
+        queueLoading={appState.queueLoading}
+      />
 
       {appState.error && <div className="error">{appState.error}</div>}
 
@@ -185,39 +181,16 @@ export function App() {
             onCorrupt={handleNext}
           />
 
-          {/* Transaction info */}
-          <div className="tx-info">
-            <a
-              href={`https://viewblock.io/arweave/tx/${appState.currentTx.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              TX: {appState.currentTx.id.slice(0,6)}…
-            </a>
-            <span></span>
-            <a
-              href={`https://viewblock.io/arweave/address/${appState.currentTx.owner.address}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Owner: {appState.currentTx.owner.address.slice(0,6)}…
-            </a>
-            <span></span>
-            <a
-              className="tx-info-time"
-              href={`https://viewblock.io/arweave/block/${appState.currentTx.block.height}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              {appState.formattedTime}
-            </a>
-          </div>
+          <TransactionInfo 
+            txMeta={appState.currentTx} 
+            formattedTime={appState.formattedTime} 
+          />
 
-          <div className="media-actions">
-            <button className="btn share-btn" onClick={handleShare}>🔗 Share</button>
-            <button className="btn download-btn" onClick={handleDownload}>⬇️ Download</button>
-            <button className="btn details-btn" onClick={() => appState.setDetailsOpen(true)}>📇 Details</button>
-          </div>
+          <MediaActions
+            onShare={handleShare}
+            onDownload={handleDownload}
+            onOpenDetails={() => appState.setDetailsOpen(true)}
+          />
         </>}
       </main>
 
@@ -228,105 +201,31 @@ export function App() {
         onClose={() => appState.setDetailsOpen(false)}
       />
 
-      {/* Channels Backdrop & Drawer */}
-      <div className={`channels-backdrop ${appState.showChannels ? 'open' : ''}`} onClick={appState.closeChannels} />
-      <div className={`channels-drawer ${appState.showChannels ? 'open' : ''}`}>
-        <button className="drawer-close" onClick={appState.closeChannels}>✖️</button>
-        <h2>Channels</h2>
-        <div className="channel-picker">
-          <button className={appState.media === 'images' ? 'active' : ''} onClick={() => { appState.setMedia('images'); appState.closeChannels() }}>🖼 Images</button>
-          <button className={appState.media === 'music' ? 'active' : ''} onClick={() => { appState.setMedia('music'); appState.closeChannels() }}>🎵 Music</button>
-          <button className={appState.media === 'videos' ? 'active' : ''} onClick={() => { appState.setMedia('videos'); appState.closeChannels() }}>🎬 Videos</button>
-          <button className={appState.media === 'websites' ? 'active' : ''} onClick={() => { appState.setMedia('websites'); appState.closeChannels() }}>🌐 Websites</button>
-          <button className={appState.media === 'text' ? 'active' : ''} onClick={() => { appState.setMedia('text'); appState.closeChannels() }}>📖 Text</button>
-          <button className={appState.media === 'arfs' ? 'active' : ''} onClick={() => { appState.setMedia('arfs'); appState.closeChannels() }}>📁 ArFS</button>
-          <button className={appState.media === 'everything' ? 'active' : ''} onClick={() => { appState.setMedia('everything'); appState.closeChannels() }}>⚡ Everything</button>
-        </div>
-        
-        {/* Owner filter controls */}
-        {(appState.currentTx || appState.ownerAddress) && (
-          <div className="owner-filter">
-            {appState.ownerAddress ? (
-              <>
-                <div className="filter-label">Filtering by owner: {appState.ownerAddress.slice(0, 8)}...</div>
-                <button className="btn active" onClick={() => { appState.setOwnerAddress(undefined); appState.closeChannels() }}>
-                  👥 Show everyone
-                </button>
-              </>
-            ) : appState.currentTx ? (
-              <button className="btn" onClick={() => { appState.setOwnerAddress(appState.currentTx!.owner.address); appState.closeChannels() }}>
-                👤 More from this owner
-              </button>
-            ) : null}
-          </div>
-        )}
-        
-        <h3>When</h3>
-        <div className="time-picker">
-          <button className={appState.recency === 'new' ? 'active' : ''} onClick={() => { appState.setRecency('new'); appState.closeChannels() }}>⏰ New</button>
-          <button className={appState.recency === 'old' ? 'active' : ''} onClick={() => { appState.setRecency('old'); appState.closeChannels() }}>🗄️ Old</button>
-        </div>
-        
-        <BlockRangeSlider
-          tempRange={rangeSlider.tempRange}
-          setTempRange={rangeSlider.setTempRange}
-          chainTip={deepLink.chainTip}
-        />
+      <ChannelsDrawer
+        open={appState.showChannels}
+        onClose={appState.closeChannels}
+        currentMedia={appState.media}
+        onMediaChange={appState.setMedia}
+        currentTx={appState.currentTx}
+        ownerAddress={appState.ownerAddress}
+        onOwnerFilterChange={appState.setOwnerAddress}
+        recency={appState.recency}
+        onRecencyChange={appState.setRecency}
+        tempRange={rangeSlider.tempRange}
+        setTempRange={rangeSlider.setTempRange}
+        chainTip={deepLink.chainTip}
+        rangeError={rangeSlider.rangeError}
+        queueLoading={appState.queueLoading}
+        onResetRange={rangeSlider.resetToSliderRange}
+        onApplyRange={handleApplyRange}
+      />
 
-        {rangeSlider.rangeError && <div className="slider-error">{rangeSlider.rangeError}</div>}
-
-        <div className="block-range-actions">
-          <button
-            className="btn"
-            onClick={rangeSlider.resetToSliderRange}
-          >
-            Cancel
-          </button>
-          <button
-            className="btn"
-            onClick={handleApplyRange}
-            disabled={rangeSlider.tempRange.min >= rangeSlider.tempRange.max || appState.queueLoading}
-          >
-            {appState.queueLoading ? "Loading…" : "Apply"}
-          </button>
-        </div>
-      </div>
-
-      <footer className="app-footer">
-        <nav>
-          <button
-            className="footer-link"
-            onClick={() => appState.setShowAbout(true)}
-          >
-            About
-          </button>
-          <span className="footer-separator">|</span>
-          <a href="https://github.com/roam-the-permaweb/roam-web" target="_blank" rel="noopener noreferrer" className="footer-link">GitHub</a>
-        </nav>
-        <div className="footer-copy">Roam v0.0.4</div>
-      </footer>
+      <AppFooter onOpenAbout={() => appState.setShowAbout(true)} />
       
-      {/* About Modal */}
-      {appState.showAbout && (
-        <div className="about-modal">
-          <div className="modal-backdrop" onClick={() => appState.setShowAbout(false)} />
-          <div className="modal-content">
-            <h2>Ready to Roam?</h2>
-            <p>
-              This playful app lets you randomly explore Arweave content:
-              images, music, videos, websites, and even text documents.
-              <br></br>
-              <br></br>
-              Just pick a channel, choose New or Old, and click Next to
-              roam around the permaweb. Filter by creator, dive deep into
-              history, or share those hidden gems!
-            </p>
-            <button className="modal-close-btn" onClick={() => appState.setShowAbout(false)}>
-              ✖️
-            </button>
-          </div>
-        </div>
-      )}
+      <AboutModal 
+        open={appState.showAbout} 
+        onClose={() => appState.setShowAbout(false)} 
+      />
     </div>
   )
 }

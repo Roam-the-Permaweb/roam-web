@@ -32,7 +32,40 @@ export function useDeepLink() {
         // Parse txid
         if (params.has('txid')) {
           try {
-            opts.initialTx = await fetchTxMetaById(params.get('txid')!)
+            const initialTx = await fetchTxMetaById(params.get('txid')!)
+            
+            // Check if this is an ArFS metadata file
+            const entityType = initialTx.tags.find(tag => tag.name === 'Entity-Type')?.value
+            if (entityType === 'file') {
+              try {
+                // Fetch ArFS metadata
+                const response = await fetch(`${GATEWAY_DATA_SOURCE[0]}/${initialTx.id}`)
+                const metadata = await response.json()
+                
+                const {
+                  dataTxId,
+                  name,
+                  size,
+                  dataContentType,
+                  ...rest
+                } = metadata
+                
+                // Add ArFS metadata to the transaction
+                initialTx.arfsMeta = {
+                  dataTxId,
+                  name,
+                  size,
+                  contentType: dataContentType,
+                  customTags: rest,
+                }
+                
+                console.log('Detected ArFS file, loaded metadata:', initialTx.arfsMeta)
+              } catch (arfsError) {
+                console.warn('Failed to load ArFS metadata for deep linked transaction:', arfsError)
+              }
+            }
+            
+            opts.initialTx = initialTx
           } catch (error) {
             console.warn('Failed to fetch initial transaction:', error)
           }
@@ -75,6 +108,15 @@ export function useDeepLink() {
             }
           } else {
             console.warn('Ignoring invalid channel media:', rawMedia)
+          }
+        } else if (opts.initialTx?.arfsMeta) {
+          // Auto-detect ArFS channel if we have ArFS metadata but no explicit channel
+          console.log('Auto-detecting ArFS channel for deep linked ArFS file')
+          opts.channel = {
+            media: 'arfs',
+            recency: 'old',
+            ownerAddress: undefined,
+            appName: undefined
           }
         }
         
