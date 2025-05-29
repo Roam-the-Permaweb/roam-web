@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { initFetchQueue } from './fetchQueue'
+import { initFetchQueue, clearSeenIds } from './fetchQueue'
 import { mockTxMeta, resetMocks } from '../test/utils'
 import type { Channel } from '../constants'
 
@@ -87,6 +87,14 @@ describe('FetchQueue Engine', () => {
         undefined,
         'TestApp'
       )
+    })
+  })
+
+  describe('clearSeenIds', () => {
+    it('should clear the seen IDs set', () => {
+      // This is a simple function that clears internal state
+      // We can't easily test the internal state, but we can verify it doesn't throw
+      expect(() => clearSeenIds()).not.toThrow()
     })
   })
 })

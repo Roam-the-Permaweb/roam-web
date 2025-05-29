@@ -190,6 +190,14 @@ export async function getNextTx(channel: Channel): Promise<TxMeta | null> {
   return tx;
 }
 
+/**
+ * Clear the seen IDs set to allow re-exploring content
+ */
+export function clearSeenIds(): void {
+  seenIds.clear();
+  logger.debug("Cleared seen IDs set");
+}
+
 export async function initFetchQueue(
   channel: Channel,
   options: {
