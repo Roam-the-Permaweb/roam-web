@@ -57,7 +57,7 @@ export function ZoomOverlay({ src, onClose }: { src: string; onClose(): void }) 
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        onDoubleClick={handleDoubleClick}
+        onDblClick={handleDoubleClick}
         style={{ cursor: isDragging ? 'grabbing' : scale > 1 ? 'grab' : 'zoom-in' }}
       >
         <img 

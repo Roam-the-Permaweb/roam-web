@@ -95,8 +95,6 @@ async function binarySearchBlockForTimestamp(targetTimestamp: number, searchType
     let high = currentBlock
     let result = searchType === 'first_after' ? high : low
   
-  console.log(`🔥 BINARY SEARCH: Looking for ${searchType} block for ${new Date(targetTimestamp).toISOString()}`)
-  console.log(`🔥 BINARY SEARCH: Search range ${low} - ${high}`)
   
   // Use range queries for more efficient searching
   const RANGE_SIZE = 100 // Fetch 100 blocks at a time for better accuracy
@@ -111,7 +109,6 @@ async function binarySearchBlockForTimestamp(targetTimestamp: number, searchType
     
     // Early termination if range is small enough
     if (high - low <= BLOCK_TOLERANCE) {
-      console.log(`🔥 BINARY SEARCH: Early termination - range ${high - low} <= tolerance ${BLOCK_TOLERANCE}`)
       result = searchType === 'first_after' ? high : low
       break
     }
@@ -162,14 +159,12 @@ async function binarySearchBlockForTimestamp(targetTimestamp: number, searchType
         Math.abs(block.timestamp - targetTimestamp) < Math.abs(best.timestamp - targetTimestamp) ? block : best
       )
       
-      console.log(`🔥 BINARY SEARCH: Range ${rangeStart}-${rangeEnd} (${blocks.length} blocks), best: ${bestInRange.height} = ${new Date(bestInRange.timestamp).toISOString()} (diff: ${Math.round(Math.abs(bestInRange.timestamp - targetTimestamp) / 1000 / 60)} min)`)
       
       // Check if we found a good enough match
       const isEarlyDate = targetTimestamp < new Date('2020-01-01').getTime()
       const tolerance = isEarlyDate ? 24 * 60 * 60 * 1000 : 6 * 60 * 60 * 1000 // 24 hours for early dates, 6 hours for recent
       
       if (rangeTimeDiff <= tolerance) {
-        console.log(`🔥 BINARY SEARCH: Close enough match found in range`)
         result = rangeResult
         break
       }
@@ -228,7 +223,6 @@ async function binarySearchBlockForTimestamp(targetTimestamp: number, searchType
     result = bestMatch
   }
   
-  console.log(`🔥 BINARY SEARCH: Found block ${result} after ${iterations} iterations (best match with ${Math.round(bestTimeDiff / 1000 / 60)} min diff)`)
   return result
   
   } catch (error) {
@@ -328,16 +322,6 @@ export function estimateBlockForTimestampSync(timestamp: number): number {
   // Ensure bounds: not below 1
   // For future dates, allow going above current block (reasonable extrapolation)
   const result = Math.max(1, estimatedBlock)
-  
-  console.log('🔥 SIMPLE ESTIMATION:', {
-    timestamp: new Date(timestamp).toISOString(),
-    currentBlock,
-    currentTime: new Date(currentTimestamp).toISOString(),
-    timeDiff: Math.round(timeDiff / 1000 / 60) + ' minutes',
-    blockDiff,
-    estimatedBlock,
-    result
-  })
   
   return result
 }
@@ -611,14 +595,6 @@ export async function getBlockRangeForDate(date: Date, requireExact: boolean = t
     const endOfDay = new Date(date)
     endOfDay.setUTCHours(23, 59, 59, 999)
     
-    console.log('🔥 BINARY SEARCH DATE RANGE:', {
-      dateKey,
-      startOfDay: startOfDay.toISOString(),
-      endOfDay: endOfDay.toISOString(),
-      startTimestamp: startOfDay.getTime(),
-      endTimestamp: endOfDay.getTime()
-    })
-    
     // Handle future dates
     const now = Date.now()
     if (startOfDay.getTime() > now) {
@@ -680,7 +656,6 @@ export async function getBlockRangeForDate(date: Date, requireExact: boolean = t
           timestamp: startOfDay.getTime()
         }
         
-        console.log(`🔥 BINARY SEARCH RESULT: ${dateKey} = blocks ${finalMinBlock}-${finalMaxBlock}`)
         return result
         
       } catch (binarySearchError) {
@@ -699,7 +674,6 @@ export async function getBlockRangeForDate(date: Date, requireExact: boolean = t
           timestamp: startOfDay.getTime()
         }
         
-        console.log(`🔥 ESTIMATION FALLBACK: ${dateKey} = blocks ${estimatedMin}-${estimatedMax}`)
         return fallbackResult
       }
       
@@ -725,7 +699,6 @@ export async function getBlockRangeForDate(date: Date, requireExact: boolean = t
       
       const fallbackMin = estimateBlockForTimestampSync(startOfDayFallback.getTime())
       const fallbackMax = estimateBlockForTimestampSync(endOfDayFallback.getTime())
-      console.log(`🔥 FINAL FALLBACK: ${dateKey} = blocks ${fallbackMin}-${fallbackMax}`)
       return { minBlock: fallbackMin, maxBlock: fallbackMax }
     } catch (fallbackError) {
       logger.error('Even estimation fallback failed:', fallbackError)
@@ -748,18 +721,14 @@ export async function getBlockRangeForDateRange(startDate: Date, endDate: Date, 
     const startDateKey = getDateKey(startDate)
     const endDateKey = getDateKey(endDate)
     
-    console.log('🔥 DATE RANGE SEARCH: Checking cache for dates:', { startDateKey, endDateKey })
-    console.log('🔥 DATE RANGE CACHE STATE:', dateRangeCache)
     
     let minBlock: number
     let maxBlock: number
     
     // Check if we can reuse cached start date block
     if (dateRangeCache.startDate && dateRangeCache.startDate.date === startDateKey) {
-      console.log('🔥 REUSING CACHED START BLOCK:', dateRangeCache.startDate.minBlock)
       minBlock = dateRangeCache.startDate.minBlock
     } else {
-      console.log('🔥 BINARY SEARCH FOR START DATE:', startDateKey)
       const startRange = await getBlockRangeForDate(startDate, requireExact)
       if (!startRange) {
         return null
@@ -771,10 +740,8 @@ export async function getBlockRangeForDateRange(startDate: Date, endDate: Date, 
     
     // Check if we can reuse cached end date block
     if (dateRangeCache.endDate && dateRangeCache.endDate.date === endDateKey) {
-      console.log('🔥 REUSING CACHED END BLOCK:', dateRangeCache.endDate.maxBlock)
       maxBlock = dateRangeCache.endDate.maxBlock
     } else {
-      console.log('🔥 BINARY SEARCH FOR END DATE:', endDateKey)
       const endRange = await getBlockRangeForDate(endDate, requireExact)
       if (!endRange) {
         return null
@@ -785,7 +752,6 @@ export async function getBlockRangeForDateRange(startDate: Date, endDate: Date, 
     }
     
     const result = { minBlock, maxBlock }
-    console.log('🔥 FINAL DATE RANGE RESULT:', result)
     
     return result
   } catch (error) {
@@ -817,7 +783,6 @@ export function getCacheSize(): number {
 // Convert block range to actual date range using real block timestamps
 export async function getDateRangeForBlockRange(minBlock: number, maxBlock: number): Promise<{ startDate: Date; endDate: Date } | null> {
   try {
-    console.log('🔥 BLOCK→DATE CONVERSION - Fetching actual block info for:', { minBlock, maxBlock })
     
     const startBlockInfo = await fetchBlockInfo(minBlock)
     const endBlockInfo = await fetchBlockInfo(maxBlock)
@@ -831,18 +796,6 @@ export async function getDateRangeForBlockRange(minBlock: number, maxBlock: numb
       startDate: new Date(startBlockInfo.timestamp),
       endDate: new Date(endBlockInfo.timestamp)
     }
-    
-    console.log('🔥 BLOCK→DATE CONVERSION:', {
-      blocks: { minBlock, maxBlock },
-      actualBlockTimestamps: {
-        startBlock: startBlockInfo.timestamp,
-        endBlock: endBlockInfo.timestamp
-      },
-      dates: {
-        start: result.startDate.toISOString(),
-        end: result.endDate.toISOString()
-      }
-    })
     
     return result
   } catch (error) {

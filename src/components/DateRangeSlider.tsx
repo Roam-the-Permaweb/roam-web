@@ -1,3 +1,32 @@
+/**
+ * DateRangeSlider - Advanced Date-Based Content Filtering
+ * 
+ * Allows users to filter Arweave content by date ranges with intelligent block conversion:
+ * 
+ * Core Functionality:
+ * - Visual date range selection with calendar inputs
+ * - Real-time block height estimation and conversion
+ * - Binary search integration for precise date-to-block mapping
+ * - Validation against Arweave blockchain history (Genesis: June 2018)
+ * 
+ * Smart Features:
+ * - Prevents invalid date ranges (future dates, pre-Arweave dates)
+ * - Real-time block estimation with sync indicators
+ * - Graceful error handling and user feedback
+ * - Integration with main content discovery queue
+ * 
+ * Technical Implementation:
+ * - Uses dateBlockUtils for high-precision block/timestamp conversion
+ * - Caches binary search results for performance
+ * - Supports both estimation (fast) and exact search (precise) modes
+ * - Handles edge cases like network failures and invalid ranges
+ * 
+ * User Experience:
+ * - Clean Apple-inspired interface with smooth transitions  
+ * - Loading states and progress indicators
+ * - Clear validation messages and helpful constraints
+ * - Reset and apply actions with proper state management
+ */
 import { useRef, useEffect, useState } from 'preact/hooks'
 import { estimateBlockForTimestampSync, isValidArweaveDate } from '../utils/dateBlockUtils'
 

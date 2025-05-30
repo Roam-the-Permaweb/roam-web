@@ -1,3 +1,26 @@
+/**
+ * Fetch Queue - Core Content Discovery Engine
+ * 
+ * Implements a sliding window algorithm for efficiently discovering Arweave content:
+ * 
+ * Algorithm Overview:
+ * - "New" content: Slides from recent blocks downward (most recent first)  
+ * - "Old" content: Random windows in blocks 100K-1.6M range
+ * - Window size: 10K blocks per fetch for optimal GraphQL performance
+ * - Auto-refills queue when <3 items remain to prevent loading delays
+ * 
+ * Content Discovery Strategy:
+ * - Maintains background transaction queue with smart prefetching
+ * - Filters by content type using GraphQL tag queries
+ * - Handles ArFS metadata fetching for file references
+ * - 404-resistant design with automatic content skipping
+ * 
+ * Performance Features:
+ * - Sliding window prevents revisiting same content
+ * - Background refilling maintains smooth UX
+ * - Efficient GraphQL queries with proper pagination
+ * - Gateway failover for reliable content delivery
+ */
 import { fetchTxsRange, getCurrentBlockHeight } from "./query";
 import { logger } from "../utils/logger";
 import { learnFromBlockRange } from "../utils/dateBlockUtils";
@@ -211,7 +234,6 @@ export async function initFetchQueue(
 ): Promise<{ min: number; max: number }> {
   queue = [];
   logger.info("Initializing fetch queue", { channel, options });
-  console.log('🔥 FETCH QUEUE INIT:', { channel, options });
 
   let txs: TxMeta[] = [];
   let min = 0;
@@ -326,7 +348,6 @@ export async function initFetchQueue(
   newTxs.forEach((tx) => seenIds.add(tx.id));
   queue = newTxs;
   logger.info(`Queue loaded with ${queue.length} txs`);
-  console.log('🔥 FETCH QUEUE RETURNING RANGE:', { min, max });
 
   // Learn from this block range for future estimation accuracy
   if (min > 0 && max > min) {

@@ -19,10 +19,10 @@ import {
   X,
   Loader2,
   Zap,
-  Play,
   Archive,
   FolderOpen,
-  Users
+  Users,
+  Menu
 } from 'lucide-preact'
 
 interface IconProps {
@@ -75,7 +75,11 @@ export const Icons = {
   
   // Creator
   Creator: (props: IconProps) => <User size={18} {...props} />,
-  Everyone: (props: IconProps) => <Users size={18} {...props} />
+  Everyone: (props: IconProps) => <Users size={18} {...props} />,
+  
+  // Menu
+  Menu: (props: IconProps) => <Menu size={18} {...props} />,
+  CloseMenu: (props: IconProps) => <X size={18} {...props} />
 }
 
 // Helper function to get media type icon

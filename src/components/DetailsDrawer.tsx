@@ -16,6 +16,14 @@ function shortenId(id: string, head = 6, tail = 6): string {
   return id.length > head + tail + 3 ? `${id.slice(0, head)}...${id.slice(-tail)}` : id;
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
 export const DetailsDrawer = ({ txMeta, open, onClose }: DetailsDrawerProps): JSX.Element | null => {
   if (!open || !txMeta) return null
 
@@ -38,28 +46,30 @@ export const DetailsDrawer = ({ txMeta, open, onClose }: DetailsDrawerProps): JS
           </button>
         </header>
         <div className="details-content">
-          {/* File Information Section (ArFS Priority) */}
-          {arfsMeta && (
-            <div className="info-section file-info">
-              <h3 className="section-title">File Information</h3>
+          {/* File Information Section */}
+          <div className="info-section file-info">
+            <h3 className="section-title">File Information</h3>
+            {arfsMeta && (
               <div className="info-item">
                 <span className="info-label">Filename</span>
                 <span className="info-value">{arfsMeta.name}</span>
               </div>
+            )}
+            <div className="info-item">
+              <span className="info-label">Type</span>
+              <span className="info-value">{arfsMeta?.contentType || txMeta.tags.find(t => t.name === 'Content-Type')?.value || 'Unknown'}</span>
+            </div>
+            <div className="info-item">
+              <span className="info-label">Size</span>
+              <span className="info-value">{formatFileSize(arfsMeta?.size || txMeta.data.size)}</span>
+            </div>
+            {arfsMeta?.customTags?.lastModifiedDate && (
               <div className="info-item">
-                <span className="info-label">Type</span>
-                <span className="info-value">{arfsMeta.contentType}</span>
+                <span className="info-label">Modified</span>
+                <span className="info-value">{new Date(Number(arfsMeta.customTags.lastModifiedDate)).toLocaleString()}</span>
               </div>
-              <div className="info-item">
-                <span className="info-label">Size</span>
-                <span className="info-value">{arfsMeta.size.toLocaleString()} bytes</span>
-              </div>
-              {arfsMeta.customTags?.lastModifiedDate && (
-                <div className="info-item">
-                  <span className="info-label">Modified</span>
-                  <span className="info-value">{new Date(Number(arfsMeta.customTags.lastModifiedDate)).toLocaleString()}</span>
-                </div>
-              )}
+            )}
+            {arfsMeta && (
               <div className="info-item">
                 <span className="info-label">Data Tx</span>
                 <span className="info-value">
@@ -73,8 +83,8 @@ export const DetailsDrawer = ({ txMeta, open, onClose }: DetailsDrawerProps): JS
                   </a>
                 </span>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* ArDrive Links Section */}
           {(driveIdTag || fileIdTag) && (

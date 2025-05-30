@@ -1,4 +1,17 @@
-// src/App.tsx
+/**
+ * Roam - Arweave Content Discovery App
+ * 
+ * A shuffle-play interface for discovering random Arweave content.
+ * Users explore transactions by content type (images, videos, music, websites, text, ArFS files)
+ * using a "Next" button to navigate through a curated stream.
+ * 
+ * Key Features:
+ * - Background transaction queue with sliding window algorithm
+ * - Deep linking support for direct content access
+ * - Advanced date range filtering with block height resolution
+ * - Apple-inspired UI with dark theme and smooth transitions
+ * - PWA with offline support after installation
+ */
 import { useEffect, useState } from 'preact/hooks'
 import { MediaView } from './components/MediaView'
 import { DetailsDrawer } from './components/DetailsDrawer'
@@ -8,7 +21,6 @@ import { ConsentModal } from './components/ConsentModal'
 import { AppHeader } from './components/AppHeader'
 import { AppControls } from './components/AppControls'
 import { TransactionInfo } from './components/TransactionInfo'
-import { MediaActions } from './components/MediaActions'
 import { AboutModal } from './components/AboutModal'
 import { AppFooter } from './components/AppFooter'
 import { ChannelsDrawer } from './components/ChannelsDrawer'
@@ -24,12 +36,22 @@ import './styles/app.css'
 import './styles/channels-drawer.css'
 
 export function App() {
-  // Custom hooks
+  /**
+   * Core Application State Management
+   * 
+   * The app uses a custom hook pattern for state management:
+   * - useConsent: Handles NSFW content consent
+   * - useDeepLink: Parses URL parameters and sets initial state  
+   * - useAppState: Main application state (current transaction, queue, loading, etc.)
+   * - useNavigation: Navigation logic and actions (next, back, share, download)
+   * - useDateRangeSlider: Date-based filtering with block height resolution
+   */
   const consent = useConsent()
   const deepLink = useDeepLink()
   const appState = useAppState()
   
-  // Date range slider hook (create first to get functions)
+  // Date range filtering with block height conversion
+  // Allows users to filter content by date ranges, which are converted to Arweave block heights
   const dateRangeSliderCallbacks = {
     setCurrentTx: appState.setCurrentTx,
     setQueueLoading: appState.setQueueLoading,
@@ -38,12 +60,10 @@ export function App() {
     setRangeSlider: (range: { min: number; max: number }) => {
       // Update current block range when date range is applied
       setCurrentBlockRange(range)
-      logger.debug('🔥 Date range applied, updated currentBlockRange:', range)
-      // Date range applied - block range updated
     }
   }
   
-  // Simple default range for date slider (last 30 days) - independent of current content
+  // Default date range: last 30 days (independent of current content)
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
   const today = new Date()
   
@@ -222,22 +242,17 @@ export function App() {
               onZoom={(src) => appState.setZoomSrc(src)}
               onCorrupt={handleNext}
               loading={appState.loading}
+              onShare={handleShare}
+              onDownload={handleDownload}
+              onDetails={() => appState.setDetailsOpen(true)}
+              onOpenInNewTab={handleOpenInNewTab}
             />
 
             {!appState.loading && (
-              <>
-                <TransactionInfo 
-                  txMeta={appState.currentTx} 
-                  formattedTime={appState.formattedTime} 
-                />
-
-                <MediaActions
-                  onShare={handleShare}
-                  onDownload={handleDownload}
-                  onOpenDetails={() => appState.setDetailsOpen(true)}
-                  onOpenInNewTab={handleOpenInNewTab}
-                />
-              </>
+              <TransactionInfo 
+                txMeta={appState.currentTx} 
+                formattedTime={appState.formattedTime} 
+              />
             )}
           </>
         )}

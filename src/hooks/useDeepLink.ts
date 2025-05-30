@@ -59,15 +59,12 @@ export function useDeepLink() {
                   customTags: rest,
                 }
                 
-                console.log('Detected ArFS file, loaded metadata:', initialTx.arfsMeta)
               } catch (arfsError) {
-                console.warn('Failed to load ArFS metadata for deep linked transaction:', arfsError)
               }
             }
             
             opts.initialTx = initialTx
           } catch (error) {
-            console.warn('Failed to fetch initial transaction:', error)
           }
         }
         
@@ -107,11 +104,9 @@ export function useDeepLink() {
               appName: undefined
             }
           } else {
-            console.warn('Ignoring invalid channel media:', rawMedia)
           }
         } else if (opts.initialTx?.arfsMeta) {
           // Auto-detect ArFS channel if we have ArFS metadata but no explicit channel
-          console.log('Auto-detecting ArFS channel for deep linked ArFS file')
           opts.channel = {
             media: 'arfs',
             recency: 'old',
