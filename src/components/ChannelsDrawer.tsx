@@ -1,5 +1,10 @@
-import { BlockRangeSlider } from './BlockRangeSlider'
+import { DateRangeSlider } from './DateRangeSlider'
 import type { MediaType, TxMeta } from '../constants'
+
+interface DateRange {
+  start: Date
+  end: Date
+}
 
 interface ChannelsDrawerProps {
   open: boolean
@@ -18,14 +23,16 @@ interface ChannelsDrawerProps {
   recency: 'new' | 'old'
   onRecencyChange: (recency: 'new' | 'old') => void
   
-  // Range slider
-  tempRange: { min: number; max: number }
-  setTempRange: (range: { min: number; max: number }) => void
-  chainTip: number
+  // Date range slider
+  tempRange: DateRange
+  setTempRange: (range: DateRange) => void
   rangeError: string | null
   queueLoading: boolean
+  isResolvingBlocks?: boolean
+  actualBlocks?: { min: number; max: number } | null // Actual blocks when syncing
   onResetRange: () => void
   onApplyRange: () => void
+  onBlockRangeEstimated?: (minBlock: number, maxBlock: number) => void
 }
 
 export function ChannelsDrawer({
@@ -40,11 +47,13 @@ export function ChannelsDrawer({
   onRecencyChange,
   tempRange,
   setTempRange,
-  chainTip,
   rangeError,
   queueLoading,
+  isResolvingBlocks = false,
+  actualBlocks,
   onResetRange,
-  onApplyRange
+  onApplyRange,
+  onBlockRangeEstimated
 }: ChannelsDrawerProps) {
   const handleMediaChange = (media: MediaType) => {
     onMediaChange(media)
@@ -105,10 +114,12 @@ export function ChannelsDrawer({
           <button className={recency === 'old' ? 'active' : ''} onClick={() => handleRecencyChange('old')}>🗄️ Old</button>
         </div>
         
-        <BlockRangeSlider
+        <DateRangeSlider
           tempRange={tempRange}
           setTempRange={setTempRange}
-          chainTip={chainTip}
+          onBlockRangeEstimated={onBlockRangeEstimated}
+          isLoading={isResolvingBlocks}
+          actualBlocks={actualBlocks || undefined}
         />
 
         {rangeError && <div className="slider-error">{rangeError}</div>}
@@ -123,9 +134,9 @@ export function ChannelsDrawer({
           <button
             className="btn"
             onClick={onApplyRange}
-            disabled={tempRange.min >= tempRange.max || queueLoading}
+            disabled={tempRange.start >= tempRange.end || queueLoading}
           >
-            {queueLoading ? "Loading…" : "Apply"}
+            {queueLoading ? "Loading…" : isResolvingBlocks ? "Resolving…" : "Apply"}
           </button>
         </div>
       </div>

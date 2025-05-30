@@ -1,5 +1,5 @@
 // src/App.tsx
-import { useEffect } from 'preact/hooks'
+import { useEffect, useState } from 'preact/hooks'
 import { MediaView } from './components/MediaView'
 import { DetailsDrawer } from './components/DetailsDrawer'
 import { ZoomOverlay } from './components/ZoomOverlay'
@@ -17,7 +17,8 @@ import { useConsent } from './hooks/useConsent'
 import { useDeepLink } from './hooks/useDeepLink'
 import { useAppState } from './hooks/useAppState'
 import { useNavigation } from './hooks/useNavigation'
-import { useRangeSlider } from './hooks/useRangeSlider'
+import { useDateRangeSlider } from './hooks/useDateRangeSlider'
+import { logger } from './utils/logger'
 import { MAX_AD_CLICKS, MIN_AD_CLICKS } from './constants'
 import './styles/app.css'
 import './styles/channels-drawer.css'
@@ -28,25 +29,48 @@ export function App() {
   const deepLink = useDeepLink()
   const appState = useAppState()
   
-  // Range slider hook (create first to get functions)
-  const rangeSliderCallbacks = {
+  // Date range slider hook (create first to get functions)
+  const dateRangeSliderCallbacks = {
     setCurrentTx: appState.setCurrentTx,
     setQueueLoading: appState.setQueueLoading,
     setError: appState.setError,
-    closeChannels: appState.closeChannels
+    closeChannels: appState.closeChannels,
+    setRangeSlider: (range: { min: number; max: number }) => {
+      // Update current block range when date range is applied
+      setCurrentBlockRange(range)
+      logger.debug('🔥 Date range applied, updated currentBlockRange:', range)
+      console.log('🔥 DATE RANGE APPLIED - BLOCK RANGE UPDATED:', range)
+    }
   }
   
-  const rangeSlider = useRangeSlider(1, 1_000_000_000_000_000, rangeSliderCallbacks)
+  // Simple default range for date slider (last 30 days) - independent of current content
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+  const today = new Date()
   
-  // Navigation callbacks
+  const dateRangeSlider = useDateRangeSlider(thirtyDaysAgo, today, dateRangeSliderCallbacks)
+  
+  // Track current block range for date slider sync
+  const [currentBlockRange, setCurrentBlockRange] = useState<{ min: number; max: number } | null>(null)
+
+  // Navigation callbacks 
   const navigationCallbacks = {
     setCurrentTx: appState.setCurrentTx,
     setLoading: appState.setLoading,
     setQueueLoading: appState.setQueueLoading,
     setError: appState.setError,
     clearError: appState.clearError,
-    setRangeSlider: rangeSlider.setRangeSlider,
-    setTempRange: rangeSlider.setTempRange
+    setRangeSlider: (range: { min: number; max: number }) => {
+      // Store current block range for potential date slider sync
+      setCurrentBlockRange(range)
+      logger.debug('🔥 setRangeSlider called with:', range)
+      console.log('🔥 BLOCK RANGE UPDATED:', range)
+    },
+    setTempRange: (range: { min: number; max: number }) => {
+      // Also store temp range updates
+      setCurrentBlockRange(range)
+      logger.debug('🔥 setTempRange called with:', range)
+      console.log('🔥 TEMP RANGE UPDATED:', range)
+    }
   }
   
   const navigation = useNavigation(navigationCallbacks)
@@ -93,10 +117,8 @@ export function App() {
           appState.setMedia(deepLink.deepLinkOpts.channel.media)
         }
         
-        const range = await navigation.initializeQueue(appState.channel, opts)
-        if (range && !cancelled) {
-          rangeSlider.updateRanges(range)
-        }
+        await navigation.initializeQueue(appState.channel, opts)
+        // No need to sync date slider - it's independent
         
         if (deepLink.deepLinkOpts && !cancelled) {
           deepLink.clearDeepLink()
@@ -111,6 +133,8 @@ export function App() {
     initializeApp()
     return () => { cancelled = true }
   }, [appState.media, appState.recency, appState.ownerAddress, appState.appName, deepLink.deepLinkParsed])
+  
+  // Date slider is independent - no automatic syncing needed
   
   // Early return if consent rejected
   if (consent.rejected) return null
@@ -134,7 +158,7 @@ export function App() {
   
   const handleRoam = () => navigation.handleRoam(appState.channel)
   
-  const handleApplyRange = () => rangeSlider.applyCustomRange(
+  const handleApplyRange = () => dateRangeSlider.applyCustomDateRange(
     appState.channel,
     appState.ownerAddress,
     appState.appName,
@@ -161,7 +185,17 @@ export function App() {
         onBack={navigation.handleBack}
         onNext={handleNext}
         onRoam={handleRoam}
-        onOpenChannels={appState.openChannels}
+        onOpenChannels={async () => {
+          // Sync date slider with current block range when opening channels
+          console.log('🔥 OPENING CHANNELS - currentBlockRange:', currentBlockRange)
+          if (currentBlockRange) {
+            console.log('🔥 SYNCING DATE SLIDER WITH:', currentBlockRange)
+            await dateRangeSlider.syncWithCurrentBlockRange(currentBlockRange.min, currentBlockRange.max)
+          } else {
+            console.log('🔥 NO currentBlockRange TO SYNC!')
+          }
+          appState.openChannels()
+        }}
         hasCurrentTx={!!appState.currentTx}
         loading={appState.loading}
         queueLoading={appState.queueLoading}
@@ -211,13 +245,15 @@ export function App() {
         onOwnerFilterChange={appState.setOwnerAddress}
         recency={appState.recency}
         onRecencyChange={appState.setRecency}
-        tempRange={rangeSlider.tempRange}
-        setTempRange={rangeSlider.setTempRange}
-        chainTip={deepLink.chainTip}
-        rangeError={rangeSlider.rangeError}
+        tempRange={dateRangeSlider.tempRange}
+        setTempRange={dateRangeSlider.setTempRange}
+        rangeError={dateRangeSlider.rangeError}
         queueLoading={appState.queueLoading}
-        onResetRange={rangeSlider.resetToSliderRange}
+        isResolvingBlocks={dateRangeSlider.isResolvingBlocks}
+        actualBlocks={dateRangeSlider.actualBlocks}
+        onResetRange={dateRangeSlider.resetToSliderRange}
         onApplyRange={handleApplyRange}
+        onBlockRangeEstimated={dateRangeSlider.handleBlockRangeEstimated}
       />
 
       <AppFooter onOpenAbout={() => appState.setShowAbout(true)} />

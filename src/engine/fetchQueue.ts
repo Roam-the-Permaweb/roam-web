@@ -1,5 +1,6 @@
 import { fetchTxsRange, getCurrentBlockHeight } from "./query";
 import { logger } from "../utils/logger";
+import { learnFromBlockRange } from "../utils/dateBlockUtils";
 import {
   type TxMeta,
   type Channel,
@@ -210,6 +211,7 @@ export async function initFetchQueue(
 ): Promise<{ min: number; max: number }> {
   queue = [];
   logger.info("Initializing fetch queue", { channel, options });
+  console.log('🔥 FETCH QUEUE INIT:', { channel, options });
 
   let txs: TxMeta[] = [];
   let min = 0;
@@ -324,6 +326,12 @@ export async function initFetchQueue(
   newTxs.forEach((tx) => seenIds.add(tx.id));
   queue = newTxs;
   logger.info(`Queue loaded with ${queue.length} txs`);
+  console.log('🔥 FETCH QUEUE RETURNING RANGE:', { min, max });
+
+  // Learn from this block range for future estimation accuracy
+  if (min > 0 && max > min) {
+    learnFromBlockRange(min, max, 0.8);
+  }
 
   // —— 7) Return the actual window ——
   return { min, max };
