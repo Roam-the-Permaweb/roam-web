@@ -9,6 +9,10 @@ type Props = {
   onBlockRangeEstimated?: (minBlock: number, maxBlock: number) => void
   isLoading?: boolean
   actualBlocks?: { min: number; max: number } // When syncing with known blocks, skip estimation
+  rangeError?: string | null
+  queueLoading?: boolean
+  onResetRange?: () => void
+  onApplyRange?: () => void
 }
 
 export function DateRangeSlider({ 
@@ -16,7 +20,11 @@ export function DateRangeSlider({
   setTempRange, 
   onBlockRangeEstimated,
   isLoading = false,
-  actualBlocks
+  actualBlocks,
+  rangeError,
+  queueLoading = false,
+  onResetRange,
+  onApplyRange
 }: Props) {
   const startInput = useRef<HTMLInputElement>(null)
   const endInput = useRef<HTMLInputElement>(null)
@@ -37,6 +45,20 @@ export function DateRangeSlider({
     return new Date(dateString + 'T12:00:00.000Z') // Use noon UTC to avoid timezone issues
   }
   
+  // Clear validation errors when dates become valid
+  useEffect(() => {
+    if (validationError && tempRange.start && tempRange.end) {
+      // Check if the current range is now valid
+      const isStartValid = isValidArweaveDate(tempRange.start)
+      const isEndValid = isValidArweaveDate(tempRange.end)
+      const isRangeValid = tempRange.start < tempRange.end
+      
+      if (isStartValid && isEndValid && isRangeValid) {
+        setValidationError(null)
+      }
+    }
+  }, [tempRange.start?.getTime(), tempRange.end?.getTime(), validationError])
+
   // Update block display - intelligently update only the changed date's block
   useEffect(() => {
     const updateBlockDisplay = () => {
@@ -44,7 +66,7 @@ export function DateRangeSlider({
       
       // If we have actual blocks (from syncing), use those instead of estimating
       if (actualBlocks) {
-        console.log('🔥 USING ACTUAL BLOCKS:', actualBlocks)
+        // Using actual blocks from syncing process
         setEstimatedBlocks(actualBlocks)
         
         // Update refs to track current times
@@ -68,7 +90,7 @@ export function DateRangeSlider({
       
       // If this is the first run (no previous values), estimate both
       if (prevStartTime.current === null || prevEndTime.current === null) {
-        console.log('🔥 INITIAL BLOCK ESTIMATION for both dates')
+        // Initial block estimation for both dates
         const estimatedMin = estimateBlockForTimestampSync(currentStartTime)
         const estimatedMax = estimateBlockForTimestampSync(currentEndTime)
         
@@ -80,7 +102,7 @@ export function DateRangeSlider({
       }
       // If only start date changed, update only min block
       else if (startChanged && !endChanged) {
-        console.log('🔥 START DATE CHANGED - updating min block only')
+        // Start date changed - updating min block only
         const newMinBlock = estimateBlockForTimestampSync(currentStartTime)
         
         setEstimatedBlocks(prev => {
@@ -96,7 +118,7 @@ export function DateRangeSlider({
       }
       // If only end date changed, update only max block
       else if (endChanged && !startChanged) {
-        console.log('🔥 END DATE CHANGED - updating max block only')
+        // End date changed - updating max block only
         const newMaxBlock = estimateBlockForTimestampSync(currentEndTime)
         
         setEstimatedBlocks(prev => {
@@ -112,7 +134,7 @@ export function DateRangeSlider({
       }
       // If both changed (unlikely but possible), update both
       else if (startChanged && endChanged) {
-        console.log('🔥 BOTH DATES CHANGED - updating both blocks')
+        // Both dates changed - updating both blocks
         const estimatedMin = estimateBlockForTimestampSync(currentStartTime)
         const estimatedMax = estimateBlockForTimestampSync(currentEndTime)
         
@@ -140,9 +162,11 @@ export function DateRangeSlider({
       const isEnd = active === endInput.current
 
       if (isStart || isEnd) {
-        e.preventDefault()
+        // Only handle arrow keys, allow all other keys for manual typing
         const delta = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0
         if (delta === 0) return
+
+        e.preventDefault() // Only prevent default for arrow keys
 
         if (isStart) {
           const newStart = new Date(tempRange.start)
@@ -167,36 +191,24 @@ export function DateRangeSlider({
   }, [tempRange])
 
   const handleStartChange = (dateString: string) => {
+    // Clear any existing validation errors when user types
     setValidationError(null)
     
-    // Try to parse and validate the date if it looks like a valid format
-    if (dateString.length >= 8 && dateString.includes('-')) {
-      try {
-        const newStart = parseInputDate(dateString)
-        
-        // Check if the parsed date is valid (not NaN)
-        if (isNaN(newStart.getTime())) {
-          return
-        }
-        
-        // Validate constraints only for complete, valid dates
-        if (dateString.length === 10) {
-          if (!isValidArweaveDate(newStart)) {
-            setValidationError('Date must be between June 2018 and today')
-            return
-          }
-          
-          if (newStart >= tempRange.end) {
-            setValidationError('Start date must be before end date')
-            return
-          }
-        }
-        
-        // Update the date if it's valid
+    // Allow empty string for clearing the input
+    if (!dateString) {
+      return
+    }
+    
+    try {
+      const newStart = parseInputDate(dateString)
+      
+      // Check if the parsed date is valid (not NaN)
+      if (!isNaN(newStart.getTime())) {
+        // Update the date without validation - let user type freely
         setTempRange({ ...tempRange, start: newStart })
-      } catch (error) {
-        // Silently ignore parsing errors for partial input
       }
+    } catch (error) {
+      // Silently ignore parsing errors while typing
     }
   }
 
@@ -204,42 +216,31 @@ export function DateRangeSlider({
     const input = e.target as HTMLInputElement
     const dateString = input.value
     
-    if (dateString.length === 10) {
+    // Native date inputs handle validation themselves
+    if (dateString) {
       handleStartChange(dateString)
     }
   }
 
   const handleEndChange = (dateString: string) => {
+    // Clear any existing validation errors when user types
     setValidationError(null)
     
-    // Try to parse and validate the date if it looks like a valid format
-    if (dateString.length >= 8 && dateString.includes('-')) {
-      try {
-        const newEnd = parseInputDate(dateString)
-        
-        // Check if the parsed date is valid (not NaN)
-        if (isNaN(newEnd.getTime())) {
-          return
-        }
-        
-        // Validate constraints only for complete, valid dates
-        if (dateString.length === 10) {
-          if (!isValidArweaveDate(newEnd)) {
-            setValidationError('Date must be between June 2018 and today')
-            return
-          }
-          
-          if (newEnd <= tempRange.start) {
-            setValidationError('End date must be after start date')
-            return
-          }
-        }
-        
-        // Update the date if it's valid
+    // Allow empty string for clearing the input
+    if (!dateString) {
+      return
+    }
+    
+    try {
+      const newEnd = parseInputDate(dateString)
+      
+      // Check if the parsed date is valid (not NaN)
+      if (!isNaN(newEnd.getTime())) {
+        // Update the date without validation - let user type freely
         setTempRange({ ...tempRange, end: newEnd })
-      } catch (error) {
-        // Silently ignore parsing errors for partial input
       }
+    } catch (error) {
+      // Silently ignore parsing errors while typing
     }
   }
 
@@ -247,8 +248,42 @@ export function DateRangeSlider({
     const input = e.target as HTMLInputElement
     const dateString = input.value
     
-    if (dateString.length === 10) {
+    // Native date inputs handle validation themselves
+    if (dateString) {
       handleEndChange(dateString)
+    }
+  }
+
+  // Validate date range when Apply is clicked
+  const validateDateRange = (): boolean => {
+    if (!tempRange.start || !tempRange.end) {
+      setValidationError('Please select both start and end dates')
+      return false
+    }
+    
+    if (!isValidArweaveDate(tempRange.start)) {
+      setValidationError('Start date must be between June 2018 and today')
+      return false
+    }
+    
+    if (!isValidArweaveDate(tempRange.end)) {
+      setValidationError('End date must be between June 2018 and today')
+      return false
+    }
+    
+    if (tempRange.start >= tempRange.end) {
+      setValidationError('Start date must be before end date')
+      return false
+    }
+    
+    setValidationError(null)
+    return true
+  }
+  
+  // Handle Apply button click with validation
+  const handleApply = () => {
+    if (validateDateRange() && onApplyRange) {
+      onApplyRange()
     }
   }
 
@@ -315,6 +350,31 @@ export function DateRangeSlider({
         <div className="date-range-status error">
           <span className="status-icon">⚠️</span>
           <span>{validationError}</span>
+        </div>
+      )}
+
+      {rangeError && (
+        <div className="date-range-status error">
+          <span className="status-icon">⚠️</span>
+          <span>{rangeError}</span>
+        </div>
+      )}
+
+      {(onResetRange && onApplyRange) && (
+        <div className="date-range-actions">
+          <button
+            className="date-action-btn secondary"
+            onClick={onResetRange}
+          >
+            Cancel
+          </button>
+          <button
+            className="date-action-btn primary"
+            onClick={handleApply}
+            disabled={queueLoading}
+          >
+            {queueLoading ? "Loading…" : isLoading ? "Resolving…" : "Apply"}
+          </button>
         </div>
       )}
     </div>

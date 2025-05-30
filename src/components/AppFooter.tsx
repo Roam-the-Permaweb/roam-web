@@ -5,17 +5,25 @@ interface AppFooterProps {
 export function AppFooter({ onOpenAbout }: AppFooterProps) {
   return (
     <footer className="app-footer">
-      <nav>
+      <div className="footer-content">
         <button
-          className="footer-link"
+          className="footer-item"
           onClick={onOpenAbout}
         >
           About
         </button>
-        <span className="footer-separator">|</span>
-        <a href="https://github.com/roam-the-permaweb/roam-web" target="_blank" rel="noopener noreferrer" className="footer-link">GitHub</a>
-      </nav>
-      <div className="footer-copy">Roam v0.0.4</div>
+        <span className="footer-separator">•</span>
+        <a 
+          href="https://github.com/roam-the-permaweb/roam-web" 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="footer-item"
+        >
+          GitHub
+        </a>
+        <span className="footer-separator">•</span>
+        <span className="footer-item footer-version">v0.1.0</span>
+      </div>
     </footer>
   )
 }

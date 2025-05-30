@@ -373,7 +373,8 @@ describe('dateBlockUtils', () => {
       const endDate2 = new Date('2024-03-10T00:00:00.000Z') // Much later date for clear difference
       
       let fetchCallCount = 0
-      global.fetch = vi.fn().mockImplementation((url: string) => {
+      let blockFetchCallCount = 0  // Track actual block fetches separately
+      global.fetch = vi.fn().mockImplementation((url: string, options?: any) => {
         fetchCallCount++
         
         if (url.includes('/info')) {
@@ -383,16 +384,54 @@ describe('dateBlockUtils', () => {
           })
         }
         
+        // Handle GraphQL requests
+        if (url.includes('/graphql')) {
+          const body = JSON.parse(options?.body || '{}')
+          const variables = body.variables || {}
+          const height = variables.height
+          
+          if (height) {
+            blockFetchCallCount++
+            let timestamp: number
+            
+            // Use block fetch count to determine which date we're processing
+            if (blockFetchCallCount <= 2) { 
+              // First date range: return earlier timestamps
+              timestamp = Math.floor(new Date('2024-03-06T12:00:00.000Z').getTime() / 1000)
+            } else if (blockFetchCallCount <= 4) {
+              // Second date range: return later timestamps for new end date
+              timestamp = Math.floor(new Date('2024-03-10T12:00:00.000Z').getTime() / 1000)
+            } else {
+              // Fallback
+              timestamp = Math.floor(new Date('2024-03-08T12:00:00.000Z').getTime() / 1000)
+            }
+            
+            return Promise.resolve({
+              ok: true,
+              json: () => Promise.resolve({
+                data: {
+                  block: {
+                    height,
+                    timestamp
+                  }
+                }
+              })
+            })
+          }
+        }
+        
+        // Handle HTTP API fallback
         if (url.includes('/block/height/')) {
+          blockFetchCallCount++
           const height = parseInt(url.split('/').pop() || '0')
           // Return different timestamps based on the call count to ensure different results
           let timestamp: number
           
-          // Use call count to determine which date we're processing
-          if (fetchCallCount <= 4) { 
+          // Use block fetch count to determine which date we're processing
+          if (blockFetchCallCount <= 2) { 
             // First date range: return earlier timestamps
             timestamp = Math.floor(new Date('2024-03-06T12:00:00.000Z').getTime() / 1000)
-          } else if (fetchCallCount <= 8) {
+          } else if (blockFetchCallCount <= 4) {
             // Second date range: return later timestamps for new end date
             timestamp = Math.floor(new Date('2024-03-10T12:00:00.000Z').getTime() / 1000)
           } else {
@@ -411,19 +450,19 @@ describe('dateBlockUtils', () => {
       
       // First call - should search for both start and end dates
       const result1 = await getBlockRangeForDateRange(startDate, endDate1, true)
-      const fetchCountAfterFirst = fetchCallCount
+      const blockFetchesAfterFirst = blockFetchCallCount
       
       expect(result1).toBeTruthy()
-      expect(fetchCountAfterFirst).toBeGreaterThan(0)
+      expect(blockFetchesAfterFirst).toBeGreaterThan(0)
       
-      // Reset fetch count to track second call
-      const originalFetchCount = fetchCallCount
-      fetchCallCount = 0
+      // Reset block fetch count to track second call
+      const originalBlockFetchCount = blockFetchCallCount
+      blockFetchCallCount = 0
       
       // Second call with same start date but different end date
       // Should reuse start date block and only search for new end date
       const result2 = await getBlockRangeForDateRange(startDate, endDate2, true)
-      const fetchCountForSecond = fetchCallCount
+      const blockFetchesForSecond = blockFetchCallCount
       
       expect(result2).toBeTruthy()
       expect(result2?.minBlock).toBe(result1?.minBlock) // Start block should be the same (cached)
@@ -434,9 +473,9 @@ describe('dateBlockUtils', () => {
         console.warn('End blocks are the same, but this could be due to mock behavior, not caching issue')
       }
       
-      // Main test: Should have made fewer fetch calls for the second request since start date was cached
-      expect(fetchCountForSecond).toBeLessThan(originalFetchCount)
-      expect(fetchCountForSecond).toBeGreaterThan(0) // But still some calls for the new end date
+      // Main test: Should have made fewer block fetch calls for the second request since start date was cached
+      expect(blockFetchesForSecond).toBeLessThan(originalBlockFetchCount)
+      expect(blockFetchesForSecond).toBeGreaterThan(0) // But still some calls for the new end date
     })
 
     it('should clear date range cache when clearDateBlockCache is called', async () => {
@@ -633,7 +672,41 @@ describe('dateBlockUtils', () => {
       const maxBlock = 1264154
       
       // Mock block responses with actual timestamps
-      global.fetch = vi.fn().mockImplementation((url: string) => {
+      global.fetch = vi.fn().mockImplementation((url: string, options?: any) => {
+        // Handle GraphQL requests
+        if (url.includes('/graphql')) {
+          const body = JSON.parse(options?.body || '{}')
+          const variables = body.variables || {}
+          const height = variables.height
+          
+          if (height === 1254155) {
+            return Promise.resolve({
+              ok: true,
+              json: () => Promise.resolve({
+                data: {
+                  block: {
+                    height: 1254155,
+                    timestamp: 1704067200 // Jan 1, 2024 00:00:00 UTC (in seconds)
+                  }
+                }
+              })
+            })
+          } else if (height === 1264154) {
+            return Promise.resolve({
+              ok: true,
+              json: () => Promise.resolve({
+                data: {
+                  block: {
+                    height: 1264154,
+                    timestamp: 1705276800 // Jan 15, 2024 00:00:00 UTC (in seconds)
+                  }
+                }
+              })
+            })
+          }
+        }
+        
+        // Handle HTTP API fallback
         if (url.includes('/1254155')) {
           return Promise.resolve({
             ok: true,
@@ -661,7 +734,7 @@ describe('dateBlockUtils', () => {
       expect(result?.endDate).toBeInstanceOf(Date)
       expect(result?.startDate.getTime()).toBe(1704067200 * 1000) // Convert to milliseconds
       expect(result?.endDate.getTime()).toBe(1705276800 * 1000)
-      expect(global.fetch).toHaveBeenCalledTimes(2)
+      expect(global.fetch).toHaveBeenCalled() // Don't check exact count since it depends on number of GraphQL gateways
     })
 
     it('should return null when block info cannot be fetched', async () => {

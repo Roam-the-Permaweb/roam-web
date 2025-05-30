@@ -76,11 +76,11 @@ export function useDateRangeSlider(
       
       if (datesUnchanged && actualBlocks) {
         // Reuse existing actual blocks since dates haven't changed
-        console.log('🔥 REUSING EXISTING BLOCKS - No date change detected:', actualBlocks)
+        // Reusing existing blocks - no date change detected
         resolvedBlockRange = { minBlock: actualBlocks.min, maxBlock: actualBlocks.max }
       } else if (datesUnchanged && blockRange) {
         // Fallback to existing block range if no actual blocks but dates are the same
-        console.log('🔥 REUSING EXISTING BLOCK RANGE - No date change detected:', blockRange)
+        // Reusing existing block range - no date change detected
         resolvedBlockRange = { minBlock: blockRange.min, maxBlock: blockRange.max }
       } else {
         // Dates have changed, need to resolve new block range
@@ -112,7 +112,7 @@ export function useDateRangeSlider(
       // Update main app's current block range state for proper sync
       if (setRangeSlider) {
         setRangeSlider({ min: resolvedBlockRange.minBlock, max: resolvedBlockRange.maxBlock })
-        console.log('🔥 UPDATED MAIN APP BLOCK RANGE:', { min: resolvedBlockRange.minBlock, max: resolvedBlockRange.maxBlock })
+        // Updated main app block range
       }
       
       // Clear seen IDs when applying custom range to allow fresh exploration
@@ -204,7 +204,7 @@ export function useDateRangeSlider(
   // Sync date range with current block range (called when channels drawer opens)
   const syncWithCurrentBlockRange = async (minBlock: number, maxBlock: number) => {
     try {
-      console.log('🔥 SYNCING DATE SLIDER WITH:', { min: minBlock, max: maxBlock })
+      // Syncing date slider with block range
       
       const actualDateRange = await getDateRangeForBlockRange(minBlock, maxBlock)
       if (actualDateRange) {
@@ -216,13 +216,7 @@ export function useDateRangeSlider(
         // Store the actual blocks so DateRangeSlider can use them instead of estimating
         setActualBlocks({ min: minBlock, max: maxBlock })
         
-        console.log('🔥 DATE SLIDER SYNCED:', { 
-          actualBlocks: { minBlock, maxBlock },
-          dateRange: {
-            start: actualDateRange.startDate.toISOString(),
-            end: actualDateRange.endDate.toISOString()
-          }
-        })
+        // Date slider synced with actual date range
       }
     } catch (error) {
       logger.warn('Failed to sync with current block range:', error)

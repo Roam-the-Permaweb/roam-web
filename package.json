@@ -1,7 +1,7 @@
 {
   "name": "roam",
   "private": true,
-  "version": "0.0.4",
+  "version": "0.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -16,6 +16,7 @@
     "graphql-request": "^7.1.2",
     "htmx.org": "^1.9.12",
     "idb-keyval": "^6.2.1",
+    "lucide-preact": "^0.511.0",
     "zustand": "^5.0.4"
   },
   "devDependencies": {

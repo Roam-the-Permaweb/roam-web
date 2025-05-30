@@ -39,7 +39,7 @@ export function App() {
       // Update current block range when date range is applied
       setCurrentBlockRange(range)
       logger.debug('🔥 Date range applied, updated currentBlockRange:', range)
-      console.log('🔥 DATE RANGE APPLIED - BLOCK RANGE UPDATED:', range)
+      // Date range applied - block range updated
     }
   }
   
@@ -63,13 +63,13 @@ export function App() {
       // Store current block range for potential date slider sync
       setCurrentBlockRange(range)
       logger.debug('🔥 setRangeSlider called with:', range)
-      console.log('🔥 BLOCK RANGE UPDATED:', range)
+      // Block range updated
     },
     setTempRange: (range: { min: number; max: number }) => {
       // Also store temp range updates
       setCurrentBlockRange(range)
       logger.debug('🔥 setTempRange called with:', range)
-      console.log('🔥 TEMP RANGE UPDATED:', range)
+      // Temp range updated
     }
   }
   
@@ -156,6 +156,13 @@ export function App() {
   
   const handleDownload = () => navigation.handleDownload(appState.currentTx)
   
+  const handleOpenInNewTab = () => {
+    if (!appState.currentTx) return
+    const dataTxId = appState.currentTx.arfsMeta?.dataTxId || appState.currentTx.id
+    const url = `https://arweave.net/${dataTxId}`
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+  
   const handleRoam = () => navigation.handleRoam(appState.channel)
   
   const handleApplyRange = () => dateRangeSlider.applyCustomDateRange(
@@ -187,12 +194,12 @@ export function App() {
         onRoam={handleRoam}
         onOpenChannels={async () => {
           // Sync date slider with current block range when opening channels
-          console.log('🔥 OPENING CHANNELS - currentBlockRange:', currentBlockRange)
+          // Opening channels drawer - syncing with current block range
           if (currentBlockRange) {
-            console.log('🔥 SYNCING DATE SLIDER WITH:', currentBlockRange)
+            // Syncing date slider with current block range
             await dateRangeSlider.syncWithCurrentBlockRange(currentBlockRange.min, currentBlockRange.max)
           } else {
-            console.log('🔥 NO currentBlockRange TO SYNC!')
+            // No current block range to sync
           }
           appState.openChannels()
         }}
@@ -204,28 +211,36 @@ export function App() {
       {appState.error && <div className="error">{appState.error}</div>}
 
       <main className="media-container">
-        {appState.loading && <div className="loading">Loading…</div>}
+        {appState.loading && !appState.currentTx && <div className="loading">Loading…</div>}
         {!appState.currentTx && !appState.loading && <div className="placeholder">Feeling curious? Tap "Next" to explore — or "Roam" to spin the dice.</div>}
-        {appState.currentTx && !appState.loading && <>
-          <MediaView
-            txMeta={appState.currentTx}
-            privacyOn={appState.privacyOn}
-            onPrivacyToggle={appState.togglePrivacy}
-            onZoom={(src) => appState.setZoomSrc(src)}
-            onCorrupt={handleNext}
-          />
+        {appState.currentTx && (
+          <>
+            <MediaView
+              txMeta={appState.currentTx}
+              privacyOn={appState.privacyOn}
+              onPrivacyToggle={appState.togglePrivacy}
+              onZoom={(src) => appState.setZoomSrc(src)}
+              onCorrupt={handleNext}
+              loading={appState.loading}
+            />
 
-          <TransactionInfo 
-            txMeta={appState.currentTx} 
-            formattedTime={appState.formattedTime} 
-          />
+            {!appState.loading && (
+              <>
+                <TransactionInfo 
+                  txMeta={appState.currentTx} 
+                  formattedTime={appState.formattedTime} 
+                />
 
-          <MediaActions
-            onShare={handleShare}
-            onDownload={handleDownload}
-            onOpenDetails={() => appState.setDetailsOpen(true)}
-          />
-        </>}
+                <MediaActions
+                  onShare={handleShare}
+                  onDownload={handleDownload}
+                  onOpenDetails={() => appState.setDetailsOpen(true)}
+                  onOpenInNewTab={handleOpenInNewTab}
+                />
+              </>
+            )}
+          </>
+        )}
       </main>
 
       {/* Details Drawer */}

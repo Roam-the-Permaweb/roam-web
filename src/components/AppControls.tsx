@@ -1,3 +1,5 @@
+import { RotateCcw, ArrowLeft, Settings, ArrowRight, Shuffle } from 'lucide-preact'
+
 interface AppControlsProps {
   onReset: () => Promise<void>
   onBack: () => Promise<void>
@@ -21,20 +23,24 @@ export function AppControls({
 }: AppControlsProps) {
   return (
     <div className="controls">
-      <button className="btn reset-btn" onClick={onReset} disabled={loading}>
-        🔄 Reset
+      <button className="nav-btn secondary" onClick={onReset} disabled={loading} title="Reset to start">
+        <RotateCcw size={20} />
       </button>
-      <button className="btn back-btn" onClick={onBack} disabled={!hasCurrentTx || loading}>
-        ← Back
+      
+      <button className="nav-btn secondary" onClick={onBack} disabled={!hasCurrentTx || loading} title="Go back">
+        <ArrowLeft size={20} />
       </button>
-      <button className="btn channels-btn" onClick={onOpenChannels} title="Channels">
-        ⚙️
+      
+      <button className="nav-btn settings" onClick={onOpenChannels} title="Open filters">
+        <Settings size={20} />
       </button>
-      <button className="btn next-btn" onClick={onNext} disabled={loading || queueLoading}>
-        Next →
+      
+      <button className="nav-btn primary" onClick={onNext} disabled={loading || queueLoading} title="Next content">
+        <ArrowRight size={20} />
       </button>
-      <button className="btn roam-btn" onClick={onRoam} disabled={loading || queueLoading}>
-        Roam 🎲
+      
+      <button className="nav-btn roam" onClick={onRoam} disabled={loading || queueLoading} title="Random explore">
+        <Shuffle size={20} />
       </button>
     </div>
   )

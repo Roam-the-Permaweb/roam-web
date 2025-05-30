@@ -1,47 +1,94 @@
-/* zoom-overlay.css */
+/* zoom-overlay.css - Enhanced with pinch-to-zoom */
 .zoom-overlay {
     position: fixed;
     inset: 0;
     background-color: rgba(0, 0, 0, 0.95);
     z-index: 9999;
-    overflow: auto;
-    -webkit-overflow-scrolling: touch;
-    cursor: grab;
-    padding: 2rem;
-    /* Remove display: flex to fix scroll clipping */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: none;
+    user-select: none;
   }
   
   .zoom-scroll-container {
-    width: fit-content;
-    height: fit-content;
-    margin: auto;
-    /* Ensure natural flow */
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    touch-action: none;
+    position: relative;
   }
   
   .zoomed-img {
-    display: block;
-    max-width: 100%;
-    max-height: 100%;
+    max-width: 90vw;
+    max-height: 90vh;
     width: auto;
     height: auto;
     object-fit: contain;
-    border-radius: 4px;
+    border-radius: 8px;
+    transform-origin: center;
+    transition: transform 0.2s ease;
+    pointer-events: none;
   }
   
   .zoom-close-btn {
     position: fixed;
-    top: 0.15rem;
-    left: 0.15rem;
-    font-size: 1rem;
-    background: rgba(0, 0, 0, 0);
-    border: none;
+    top: 1rem;
+    right: 1rem;
+    background: rgba(0, 0, 0, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     color: white;
-    padding: 0.25rem 0.25rem;
-    border-radius: 4px;
+    padding: 0.5rem;
+    border-radius: 8px;
     z-index: 10000;
     cursor: pointer;
+    backdrop-filter: blur(10px);
+    transition: all 0.2s ease;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
   
   .zoom-close-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: scale(1.05);
+  }
+  
+  .zoom-hint {
+    position: fixed;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: rgba(255, 255, 255, 0.9);
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    z-index: 10000;
+    text-align: center;
+    pointer-events: none;
+  }
+  
+  @media (max-width: 480px) {
+    .zoom-close-btn {
+      top: 0.75rem;
+      right: 0.75rem;
+      width: 36px;
+      height: 36px;
+      padding: 0.375rem;
+    }
+    
+    .zoom-hint {
+      bottom: 1rem;
+      font-size: 0.6875rem;
+      padding: 0.375rem 0.75rem;
+    }
   }

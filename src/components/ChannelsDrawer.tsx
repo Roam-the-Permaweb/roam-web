@@ -1,4 +1,5 @@
 import { DateRangeSlider } from './DateRangeSlider'
+import { Icons } from './Icons'
 import type { MediaType, TxMeta } from '../constants'
 
 interface DateRange {
@@ -77,41 +78,82 @@ export function ChannelsDrawer({
       
       {/* Drawer */}
       <div className={`channels-drawer ${open ? 'open' : ''}`}>
-        <button className="drawer-close" onClick={onClose}>✖️</button>
+        <button className="drawer-close" onClick={onClose}><Icons.Close /></button>
         
-        <h2>Channels</h2>
-        <div className="channel-picker">
-          <button className={currentMedia === 'images' ? 'active' : ''} onClick={() => handleMediaChange('images')}>🖼 Images</button>
-          <button className={currentMedia === 'music' ? 'active' : ''} onClick={() => handleMediaChange('music')}>🎵 Music</button>
-          <button className={currentMedia === 'videos' ? 'active' : ''} onClick={() => handleMediaChange('videos')}>🎬 Videos</button>
-          <button className={currentMedia === 'websites' ? 'active' : ''} onClick={() => handleMediaChange('websites')}>🌐 Websites</button>
-          <button className={currentMedia === 'text' ? 'active' : ''} onClick={() => handleMediaChange('text')}>📖 Text</button>
-          <button className={currentMedia === 'arfs' ? 'active' : ''} onClick={() => handleMediaChange('arfs')}>📁 ArFS</button>
-          <button className={currentMedia === 'everything' ? 'active' : ''} onClick={() => handleMediaChange('everything')}>⚡ Everything</button>
+        {/* Content Type Section */}
+        <div className="section">
+          <h2 className="section-title">Content Type</h2>
+          <div className="content-grid">
+            <button className={`content-card ${currentMedia === 'everything' ? 'active' : ''}`} onClick={() => handleMediaChange('everything')}>
+              <span className="content-icon"><Icons.Everything /></span>
+              <span className="content-label">Everything</span>
+            </button>
+            <button className={`content-card ${currentMedia === 'images' ? 'active' : ''}`} onClick={() => handleMediaChange('images')}>
+              <span className="content-icon"><Icons.Images /></span>
+              <span className="content-label">Images</span>
+            </button>
+            <button className={`content-card ${currentMedia === 'videos' ? 'active' : ''}`} onClick={() => handleMediaChange('videos')}>
+              <span className="content-icon"><Icons.Videos /></span>
+              <span className="content-label">Videos</span>
+            </button>
+            <button className={`content-card ${currentMedia === 'music' ? 'active' : ''}`} onClick={() => handleMediaChange('music')}>
+              <span className="content-icon"><Icons.AudioMusic /></span>
+              <span className="content-label">Music</span>
+            </button>
+            <button className={`content-card ${currentMedia === 'websites' ? 'active' : ''}`} onClick={() => handleMediaChange('websites')}>
+              <span className="content-icon"><Icons.Websites /></span>
+              <span className="content-label">Websites</span>
+            </button>
+            <button className={`content-card ${currentMedia === 'text' ? 'active' : ''}`} onClick={() => handleMediaChange('text')}>
+              <span className="content-icon"><Icons.Text /></span>
+              <span className="content-label">Text</span>
+            </button>
+            <button className={`content-card ${currentMedia === 'arfs' ? 'active' : ''}`} onClick={() => handleMediaChange('arfs')}>
+              <span className="content-icon"><Icons.ArFS /></span>
+              <span className="content-label">ArFS</span>
+            </button>
+          </div>
         </div>
         
-        {/* Owner filter controls */}
+        {/* Creator Section */}
         {(currentTx || ownerAddress) && (
-          <div className="owner-filter">
-            {ownerAddress ? (
-              <>
-                <div className="filter-label">Filtering by owner: {ownerAddress.slice(0, 8)}...</div>
-                <button className="btn active" onClick={() => handleOwnerFilter(undefined)}>
-                  👥 Show everyone
+          <div className="section">
+            <h2 className="section-title">Creator</h2>
+            <div className="creator-controls">
+              {ownerAddress ? (
+                <>
+                  <div className="creator-info">
+                    <span className="creator-icon"><Icons.Creator /></span>
+                    <span className="creator-address">{ownerAddress.slice(0, 8)}...</span>
+                  </div>
+                  <button className="creator-btn active" onClick={() => handleOwnerFilter(undefined)}>
+                    <span className="creator-icon"><Icons.Everyone /></span>
+                    <span>Show Everyone</span>
+                  </button>
+                </>
+              ) : currentTx ? (
+                <button className="creator-btn" onClick={() => handleOwnerFilter(currentTx.owner.address)}>
+                  <span className="creator-icon"><Icons.Creator /></span>
+                  <span>More from this Creator</span>
                 </button>
-              </>
-            ) : currentTx ? (
-              <button className="btn" onClick={() => handleOwnerFilter(currentTx.owner.address)}>
-                👤 More from this owner
-              </button>
-            ) : null}
+              ) : null}
+            </div>
           </div>
         )}
         
-        <h3>When</h3>
-        <div className="time-picker">
-          <button className={recency === 'new' ? 'active' : ''} onClick={() => handleRecencyChange('new')}>⏰ New</button>
-          <button className={recency === 'old' ? 'active' : ''} onClick={() => handleRecencyChange('old')}>🗄️ Old</button>
+        {/* Time Period Section */}
+        <div className="section">
+          <h2 className="section-title">Time Period</h2>
+          <div className="time-controls">
+            <button className={`time-btn ${recency === 'new' ? 'active' : ''}`} onClick={() => handleRecencyChange('new')}>
+              <span className="time-icon"><Icons.Recent /></span>
+              <span>Recent</span>
+            </button>
+            <button className={`time-btn ${recency === 'old' ? 'active' : ''}`} onClick={() => handleRecencyChange('old')}>
+              <span className="time-icon"><Icons.Archive /></span>
+              <span>Archive</span>
+            </button>
+          </div>
         </div>
         
         <DateRangeSlider
@@ -120,25 +162,11 @@ export function ChannelsDrawer({
           onBlockRangeEstimated={onBlockRangeEstimated}
           isLoading={isResolvingBlocks}
           actualBlocks={actualBlocks || undefined}
+          rangeError={rangeError}
+          queueLoading={queueLoading}
+          onResetRange={onResetRange}
+          onApplyRange={onApplyRange}
         />
-
-        {rangeError && <div className="slider-error">{rangeError}</div>}
-
-        <div className="block-range-actions">
-          <button
-            className="btn"
-            onClick={onResetRange}
-          >
-            Cancel
-          </button>
-          <button
-            className="btn"
-            onClick={onApplyRange}
-            disabled={tempRange.start >= tempRange.end || queueLoading}
-          >
-            {queueLoading ? "Loading…" : isResolvingBlocks ? "Resolving…" : "Apply"}
-          </button>
-        </div>
       </div>
     </>
   )

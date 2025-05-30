@@ -1,5 +1,6 @@
 import { logger } from './logger'
 import { GATEWAY_DATA_SOURCE } from '../engine/fetchQueue'
+import { GATEWAYS_GRAPHQL } from '../engine/query'
 
 // Average block time in milliseconds (2 minutes) - used for quick estimation
 const AVERAGE_BLOCK_TIME_MS = 2 * 60 * 1000
@@ -83,7 +84,7 @@ function getDateKey(date: Date): string {
   return date.toISOString().split('T')[0]
 }
 
-// Optimized binary search with early termination and larger steps for date ranges
+// Enhanced binary search using range queries for better accuracy and efficiency
 async function binarySearchBlockForTimestamp(targetTimestamp: number, searchType: 'first_after' | 'last_before'): Promise<number> {
   try {
     // Get current block info
@@ -97,16 +98,16 @@ async function binarySearchBlockForTimestamp(targetTimestamp: number, searchType
   console.log(`🔥 BINARY SEARCH: Looking for ${searchType} block for ${new Date(targetTimestamp).toISOString()}`)
   console.log(`🔥 BINARY SEARCH: Search range ${low} - ${high}`)
   
-  // Optimized: Use larger tolerance for date ranges (we don't need exact block precision)
+  // Use range queries for more efficient searching
+  const RANGE_SIZE = 100 // Fetch 100 blocks at a time for better accuracy
   const BLOCK_TOLERANCE = 500 // Within 500 blocks (~17 hours) is fine for date ranges
-  const maxIterations = 8 // Even more efficient limit
+  const maxIterations = 10 // Allow more iterations for range queries
   let iterations = 0
   let bestMatch = result
   let bestTimeDiff = Infinity
   
   while (low <= high && iterations < maxIterations) {
     iterations++
-    const mid = Math.floor((low + high) / 2)
     
     // Early termination if range is small enough
     if (high - low <= BLOCK_TOLERANCE) {
@@ -115,47 +116,115 @@ async function binarySearchBlockForTimestamp(targetTimestamp: number, searchType
       break
     }
     
+    const mid = Math.floor((low + high) / 2)
+    const rangeStart = Math.max(low, mid - RANGE_SIZE / 2)
+    const rangeEnd = Math.min(high, mid + RANGE_SIZE / 2)
+    
     try {
-      const blockInfo = await fetchBlockInfo(mid)
-      if (!blockInfo) {
-        logger.warn(`Could not fetch block ${mid} during binary search`)
-        break
-      }
+      // Fetch a range of blocks around the midpoint
+      const blocks = await fetchBlocksRange(rangeStart, rangeEnd)
       
-      const timeDiff = Math.abs(blockInfo.timestamp - targetTimestamp)
-      if (timeDiff < bestTimeDiff) {
-        bestMatch = mid
-        bestTimeDiff = timeDiff
-      }
-      
-      console.log(`🔥 BINARY SEARCH: Block ${mid} = ${new Date(blockInfo.timestamp).toISOString()} (diff: ${Math.round(timeDiff / 1000 / 60)} min)`)
-      
-      // Optimized: Accept "close enough" matches for date ranges
-      if (timeDiff <= 6 * 60 * 60 * 1000) { // Within 6 hours is good enough for date ranges
-        console.log(`🔥 BINARY SEARCH: Close enough match found`)
-        result = mid
-        break
-      }
-      
-      if (blockInfo.timestamp < targetTimestamp) {
-        if (searchType === 'last_before') {
-          result = mid
+      if (blocks.length === 0) {
+        // Fallback to single block fetch
+        const blockInfo = await fetchBlockInfo(mid)
+        if (!blockInfo) {
+          logger.warn(`Could not fetch block ${mid} during binary search`)
+          break
         }
-        low = mid + 1
+        blocks.push(blockInfo)
+      }
+      
+      // Find the best match within the fetched range
+      let rangeResult = result
+      let rangeTimeDiff = Infinity
+      
+      for (const block of blocks) {
+        const timeDiff = Math.abs(block.timestamp - targetTimestamp)
+        
+        // Track overall best match
+        if (timeDiff < bestTimeDiff) {
+          bestMatch = block.height
+          bestTimeDiff = timeDiff
+        }
+        
+        // Find best match for this range based on search type
+        if (searchType === 'last_before' && block.timestamp <= targetTimestamp && timeDiff < rangeTimeDiff) {
+          rangeResult = block.height
+          rangeTimeDiff = timeDiff
+        } else if (searchType === 'first_after' && block.timestamp >= targetTimestamp && timeDiff < rangeTimeDiff) {
+          rangeResult = block.height
+          rangeTimeDiff = timeDiff
+        }
+      }
+      
+      // Log the best block found in this range
+      const bestInRange = blocks.reduce((best, block) => 
+        Math.abs(block.timestamp - targetTimestamp) < Math.abs(best.timestamp - targetTimestamp) ? block : best
+      )
+      
+      console.log(`🔥 BINARY SEARCH: Range ${rangeStart}-${rangeEnd} (${blocks.length} blocks), best: ${bestInRange.height} = ${new Date(bestInRange.timestamp).toISOString()} (diff: ${Math.round(Math.abs(bestInRange.timestamp - targetTimestamp) / 1000 / 60)} min)`)
+      
+      // Check if we found a good enough match
+      const isEarlyDate = targetTimestamp < new Date('2020-01-01').getTime()
+      const tolerance = isEarlyDate ? 24 * 60 * 60 * 1000 : 6 * 60 * 60 * 1000 // 24 hours for early dates, 6 hours for recent
+      
+      if (rangeTimeDiff <= tolerance) {
+        console.log(`🔥 BINARY SEARCH: Close enough match found in range`)
+        result = rangeResult
+        break
+      }
+      
+      // Adjust search range based on the best match in the current range
+      if (bestInRange.timestamp < targetTimestamp) {
+        if (searchType === 'last_before') {
+          result = rangeResult
+        }
+        low = rangeEnd + 1
       } else {
         if (searchType === 'first_after') {
-          result = mid
+          result = rangeResult
         }
-        high = mid - 1
+        high = rangeStart - 1
       }
+      
     } catch (error) {
-      logger.warn(`Error fetching block ${mid} during binary search:`, error)
-      break
+      logger.warn(`Error fetching blocks range ${rangeStart}-${rangeEnd} during binary search:`, error)
+      // Fallback to single block
+      try {
+        const blockInfo = await fetchBlockInfo(mid)
+        if (blockInfo) {
+          const timeDiff = Math.abs(blockInfo.timestamp - targetTimestamp)
+          if (timeDiff < bestTimeDiff) {
+            bestMatch = mid
+            bestTimeDiff = timeDiff
+          }
+          
+          if (blockInfo.timestamp < targetTimestamp) {
+            if (searchType === 'last_before') {
+              result = mid
+            }
+            low = mid + 1
+          } else {
+            if (searchType === 'first_after') {
+              result = mid
+            }
+            high = mid - 1
+          }
+        } else {
+          break
+        }
+      } catch (singleError) {
+        logger.warn(`Single block fetch also failed for ${mid}:`, singleError)
+        break
+      }
     }
   }
   
   // Use best match if we didn't find exact
-  if (bestTimeDiff < Infinity && bestTimeDiff <= 24 * 60 * 60 * 1000) { // Within 24 hours
+  const isEarlyDate = targetTimestamp < new Date('2020-01-01').getTime()
+  const maxAcceptableDiff = isEarlyDate ? 7 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000 // 7 days for early, 24 hours for recent
+  
+  if (bestTimeDiff < Infinity && bestTimeDiff <= maxAcceptableDiff) {
     result = bestMatch
   }
   
@@ -294,7 +363,102 @@ export async function estimateBlockForTimestamp(timestamp: number): Promise<numb
   }
 }
 
-// Fetch block by height using direct Arweave HTTP API with intelligent caching
+// Fetch multiple blocks using GraphQL range query for more efficient binary search
+async function fetchBlocksRange(minHeight: number, maxHeight: number): Promise<{ height: number; timestamp: number }[]> {
+  const query = `
+    query GetBlocksRange($min: Int!, $max: Int!) {
+      blocks(
+        height: {
+          min: $min,
+          max: $max
+        }
+        first: 100
+        sort: HEIGHT_ASC
+      ) {
+        edges {
+          cursor
+          node {
+            id
+            timestamp
+            height
+            previous
+          }
+        }
+      }
+    }
+  `
+  
+  const variables = { min: minHeight, max: maxHeight }
+  
+  // Try each GraphQL gateway until one succeeds
+  for (const rawGw of GATEWAYS_GRAPHQL) {
+    const gw = rawGw.trim()
+    
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout for range queries
+      
+      const response = await fetch(`${gw}/graphql`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-roam-client': 'roam-mvp'
+        },
+        body: JSON.stringify({ query, variables }),
+        signal: controller.signal
+      })
+      
+      clearTimeout(timeoutId)
+      
+      if (!response.ok) {
+        logger.warn(`GraphQL blocks range request failed from ${gw}: ${response.status}`)
+        continue
+      }
+      
+      const json = await response.json()
+      
+      // Check for GraphQL errors
+      if (json.errors?.length) {
+        logger.warn(`GraphQL errors for blocks range ${minHeight}-${maxHeight}:`, json.errors.map((e: any) => e.message).join('; '))
+        continue
+      }
+      
+      const edges = json.data?.blocks?.edges || []
+      const blocks: { height: number; timestamp: number }[] = []
+      const now = Date.now()
+      
+      for (const edge of edges) {
+        const block = edge.node
+        if (block && typeof block.height === 'number' && typeof block.timestamp === 'number') {
+          const result = {
+            height: block.height,
+            timestamp: block.timestamp * 1000 // Convert to milliseconds
+          }
+          
+          blocks.push(result)
+          
+          // Cache individual blocks
+          const blockKey = block.height.toString()
+          blockCache[blockKey] = {
+            timestamp: result.timestamp,
+            fetched: now
+          }
+        }
+      }
+      
+      logger.debug(`Fetched ${blocks.length} blocks via GraphQL range query ${minHeight}-${maxHeight}`)
+      return blocks
+      
+    } catch (error) {
+      logger.warn(`Failed to fetch blocks range ${minHeight}-${maxHeight} from GraphQL gateway ${gw}:`, error)
+    }
+  }
+  
+  logger.warn(`All GraphQL gateways failed for blocks range ${minHeight}-${maxHeight}`)
+  return []
+}
+
+// Fetch block by height using GraphQL for efficiency
 async function fetchBlockInfo(height: number): Promise<{ height: number; timestamp: number } | null> {
   const blockKey = height.toString()
   const now = Date.now()
@@ -308,13 +472,91 @@ async function fetchBlockInfo(height: number): Promise<{ height: number; timesta
     }
   }
   
-  // Use the primary gateway that's serving the app's data
+  // For single block, try range query with small window first (more efficient)
+  const rangeSize = 50 // Small range for single block lookup
+  const minRange = Math.max(1, height - rangeSize)
+  const maxRange = height + rangeSize
+  
+  const blocks = await fetchBlocksRange(minRange, maxRange)
+  const targetBlock = blocks.find(block => block.height === height)
+  
+  if (targetBlock) {
+    return targetBlock
+  }
+  
+  // Fallback to single block GraphQL query
+  const query = `
+    query GetBlockInfo($height: Int!) {
+      block(height: $height) {
+        height
+        timestamp
+      }
+    }
+  `
+  
+  const variables = { height }
+  
+  // Try each GraphQL gateway until one succeeds
+  for (const rawGw of GATEWAYS_GRAPHQL) {
+    const gw = rawGw.trim()
+    
+    try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 3000)
+      
+      const response = await fetch(`${gw}/graphql`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-roam-client': 'roam-mvp'
+        },
+        body: JSON.stringify({ query, variables }),
+        signal: controller.signal
+      })
+      
+      clearTimeout(timeoutId)
+      
+      if (!response.ok) {
+        logger.warn(`GraphQL request failed for block ${height} from ${gw}: ${response.status}`)
+        continue
+      }
+      
+      const json = await response.json()
+      
+      if (json.errors?.length) {
+        logger.warn(`GraphQL errors for block ${height}:`, json.errors.map((e: any) => e.message).join('; '))
+        continue
+      }
+      
+      const blockData = json.data?.block
+      
+      if (blockData && typeof blockData.timestamp === 'number') {
+        const result = {
+          height: height,
+          timestamp: blockData.timestamp * 1000
+        }
+        
+        blockCache[blockKey] = {
+          timestamp: result.timestamp,
+          fetched: now
+        }
+        
+        logger.debug(`Cached block info for ${height} via single GraphQL query: ${new Date(result.timestamp).toISOString()}`)
+        return result
+      }
+    } catch (error) {
+      logger.warn(`Failed to fetch block ${height} from GraphQL gateway ${gw}:`, error)
+    }
+  }
+  
+  // Final fallback to HTTP API
+  logger.warn(`All GraphQL approaches failed for block ${height}, falling back to HTTP API`)
+  
   const gateway = GATEWAY_DATA_SOURCE[0] || 'https://arweave.net'
   
   try {
-    // Add timeout to prevent hanging
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 3000) // 3 second timeout (faster than GraphQL)
+    const timeoutId = setTimeout(() => controller.abort(), 3000)
     
     const response = await fetch(`${gateway.trim()}/block/height/${height}`, {
       method: 'GET',
@@ -324,30 +566,28 @@ async function fetchBlockInfo(height: number): Promise<{ height: number; timesta
     clearTimeout(timeoutId)
     
     if (!response.ok) {
-      logger.warn(`Block ${height} fetch failed from ${gateway}: ${response.status}`)
+      logger.warn(`HTTP API block ${height} fetch failed from ${gateway}: ${response.status}`)
       return null
     }
     
     const blockData = await response.json()
     
-    // Arweave HTTP API returns timestamp in seconds, convert to milliseconds
     if (blockData.timestamp && typeof blockData.timestamp === 'number') {
       const result = {
         height: height,
         timestamp: blockData.timestamp * 1000
       }
       
-      // Cache the result
       blockCache[blockKey] = {
         timestamp: result.timestamp,
         fetched: now
       }
       
-      logger.debug(`Cached block info for ${height}: ${new Date(result.timestamp).toISOString()}`)
+      logger.debug(`Cached block info for ${height} via HTTP fallback: ${new Date(result.timestamp).toISOString()}`)
       return result
     }
   } catch (error) {
-    logger.warn(`Failed to fetch block ${height} from ${gateway}:`, error)
+    logger.warn(`HTTP API fallback also failed for block ${height}:`, error)
   }
   
   return null
@@ -392,6 +632,13 @@ export async function getBlockRangeForDate(date: Date, requireExact: boolean = t
       return result
     }
     
+    // For very early dates (2018-2019), skip binary search as timestamps are unreliable
+    const year = startOfDay.getFullYear()
+    if (requireExact && year < 2020) {
+      logger.warn(`Early date ${dateKey} (year ${year}) - using estimation instead of binary search due to unreliable early blockchain timestamps`)
+      requireExact = false // Force estimation
+    }
+    
     if (requireExact) {
       try {
         // Use binary search to find exact blocks
@@ -399,21 +646,41 @@ export async function getBlockRangeForDate(date: Date, requireExact: boolean = t
         const maxBlock = await binarySearchBlockForTimestamp(endOfDay.getTime(), 'last_before')
         
         // Validate binary search results
-        if (!minBlock || !maxBlock || minBlock < 1 || maxBlock < 1 || minBlock > maxBlock) {
+        if (!minBlock || !maxBlock || minBlock < 1 || maxBlock < 1) {
           logger.warn(`Binary search returned invalid results: minBlock=${minBlock}, maxBlock=${maxBlock}, falling back to estimation`)
           throw new Error('Binary search failed')
         }
         
-        const result = { minBlock, maxBlock }
+        // Handle case where blocks are reversed (can happen with sparse early blockchain data)
+        let finalMinBlock = minBlock
+        let finalMaxBlock = maxBlock
         
-        // Cache the result
+        if (minBlock > maxBlock) {
+          logger.warn(`Binary search returned reversed blocks (min=${minBlock} > max=${maxBlock}), likely due to inconsistent timestamps in early blockchain`)
+          
+          // For early dates (before 2020), this is common due to sparse/inconsistent timestamps
+          // Use estimation as it's more reliable for this period
+          const year = startOfDay.getFullYear()
+          if (year < 2020) {
+            logger.warn(`Early date detected (${year}), falling back to estimation due to unreliable timestamps`)
+            throw new Error('Early blockchain timestamps unreliable')
+          }
+          
+          // For later dates, swap the values
+          finalMinBlock = Math.min(minBlock, maxBlock)
+          finalMaxBlock = Math.max(minBlock, maxBlock)
+        }
+        
+        const result = { minBlock: finalMinBlock, maxBlock: finalMaxBlock }
+        
+        // Cache the result with corrected values
         cache[dateKey] = {
-          minBlock,
-          maxBlock,
+          minBlock: finalMinBlock,
+          maxBlock: finalMaxBlock,
           timestamp: startOfDay.getTime()
         }
         
-        console.log(`🔥 BINARY SEARCH RESULT: ${dateKey} = blocks ${minBlock}-${maxBlock}`)
+        console.log(`🔥 BINARY SEARCH RESULT: ${dateKey} = blocks ${finalMinBlock}-${finalMaxBlock}`)
         return result
         
       } catch (binarySearchError) {
