@@ -1,36 +1,160 @@
-/* src/styles/media-view.css */
-.media-image {
-  cursor: zoom-in;
-  max-width: 100%;
-  height: auto;
-}
+/* src/styles/media-view.css - Apple-inspired refined media viewing */
 
-.media-text {
-  white-space: pre-wrap;
-  overflow-y: auto;
-  max-height: 480px;
-  padding: 1rem;
-  background: #0f0121;
-  border-radius: 0.25rem;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.media-embed-wrapper {
-  width: 100%;
-  height: 100%;
-  display: block;
-  justify-content: center;
+/* Main container - optimized for no-scroll */
+.media-view-container {
+  display: flex;
+  flex-direction: column;
   align-items: center;
+  width: 90%;
+  max-width: 800px;
+  margin: 0 auto;
+  overflow: visible;
+  padding-bottom: 0;
   position: relative;
 }
 
-.media-pdf,
-.media-iframe {
+@media (min-width: 768px) {
+  .media-view-container {
+    width: 85%;
+  }
+}
+
+@media (max-width: 480px) {
+  .media-view-container {
+    width: 95%;
+  }
+}
+
+/* Media toolbar - floating above content */
+.media-toolbar {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  z-index: 100;
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Collapsible media actions - top left corner */
+.media-actions-float {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Action toggle button */
+.action-toggle-btn {
+  background: rgba(15, 1, 33, 0.85);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  padding: 0.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  min-width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-toggle-btn:hover {
+  background: rgba(15, 1, 33, 0.95);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: scale(1.05);
+}
+
+/* Actions menu that expands */
+.actions-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  animation: slideDown 0.2s ease-out;
+}
+
+/* Action float button - similar to privacy toggle */
+.action-float-btn {
+  background: rgba(15, 1, 33, 0.85);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  padding: 0.375rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  min-width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-float-btn:hover {
+  background: rgba(15, 1, 33, 0.95);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: scale(1.05);
+}
+
+/* Slide down animation for actions menu */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Privacy toggle button - refined floating design */
+.privacy-toggle-btn {
+  background: rgba(15, 1, 33, 0.85);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  padding: 0.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  min-width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.privacy-toggle-btn:hover {
+  background: rgba(15, 1, 33, 0.95);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: scale(1.05);
+}
+
+/* Media wrapper - dynamic sizing to content */
+.media-wrapper {
   width: 100%;
-  height: 480px;
-  border: none;
-  background-color: #0f0121;
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 15, 15, 0.95);
+  border: 1px solid rgba(60, 60, 60, 0.4);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  /* Remove fixed heights - let content determine size */
 }
 
 .media-wrapper.wide {
@@ -38,161 +162,455 @@
   width: 100%;
 }
 
-
-.open-tab-btn {
-  position: absolute;
-  bottom: 1rem;
-  right: 2rem;
-  background: rgba(0,0,0,0.6);
-  color: #fff;
-  border: none;
-  padding: 0.5rem;
-  border-radius: 0.25rem;
-  cursor: pointer;
-  z-index: 1000;
+/* Content-specific sizing - follow image max-height pattern */
+.media-wrapper.content-text,
+.media-wrapper.content-pdf,
+.media-wrapper.content-website {
+  max-height: 70vh;
+  min-height: 280px;
+  height: auto;
 }
 
-.open-tab-btn:hover {
-  background: rgba(0,0,0,0.8);
+.media-wrapper.content-audio {
+  min-height: 250px;
 }
 
-.media-actions {
-  display: flex;
-  justify-content: center;
-  gap: var(--gap);
-  padding: 10px;
+@media (min-width: 768px) {
+  .media-wrapper.content-text,
+  .media-wrapper.content-pdf,
+  .media-wrapper.content-website {
+    max-height: 60vh;
+    min-height: 330px;
+  }
+  
+  .media-wrapper.content-audio {
+    min-height: 280px;
+  }
 }
 
-.media-actions button {
-  padding: 0.65rem;
-  border: none;
-  border-radius: 0.5rem;
-  font-size: 1rem;
-  font-weight: bold;
-  box-shadow: 0 4px 6px var(--shadow);
-  cursor: pointer;
-  transition: transform 0.1s ease, opacity 0.2s ease;
-  box-shadow: 0 2px 8px rgba(141, 141, 141, 0.3);
-  background: var(--bg-elevated, #1a1a1a);
+@media (max-width: 480px) {
+  .media-wrapper.content-text,
+  .media-wrapper.content-pdf,
+  .media-wrapper.content-website {
+    max-height: 60vh;
+    min-height: 160px;
+  }
+  
+  .media-wrapper.content-audio {
+    min-height: 220px;
+  }
 }
 
-.media-actions button:hover {
-  background: var(--bg-elevated-hover, #2a2a2a);
+/* Media elements - natural presentation */
+.media-element {
+  max-width: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 12px;
+  display: block;
 }
 
-.media-actions button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+/* Images - natural sizing with max constraints */
+.media-image {
+  cursor: zoom-in;
+  max-width: 100%;
+  max-height: 60vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 12px;
+  display: block;
 }
 
-.media-container {
-  flex: 1 0 auto;
+@media (min-width: 768px) {
+  .media-image {
+    max-height: 60vh;
+  }
 }
 
-/* Parent container holding media and actions, centered and responsive */
-.media-view-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 90%;
-    max-height: 480px;
-    max-width: 800px;       /* cap on desktop */
-    margin: 0 auto;
-    overflow-y: auto;
-    padding-bottom: 0.5rem;
+@media (max-width: 480px) {
+  .media-image {
+    max-height: 50vh;
   }
-  
-  /* Caps media height so details toggle and controls stay visible */
-  .media-wrapper {
-    width: 100%;
-    max-height: 480px;
-    position: relative;
-    border-radius: 0.5rem;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center; 
-  }
-  
-  /* Images and videos letterboxed to fit wrapper */
-  .media-element {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-  }
-  
-  /* Loading, error, and manual-load states centered in wrapper */
-  .media-loading,
-  .media-error,
-  .media-load-btn {
-    z-index: 1;
-    color: var(--accent);
-    padding: var(--gap);
-  }
-  
-  .media-load-btn {
-    background: #fafafa;
-    border: 2px dashed var(--accent);
-    border-radius: 0.5rem;
-    cursor: pointer;
-  }
-  
-  /* Details button below media, always visible */
-  .media-actions {
-    width: 100%;
-    display: flex;
-    justify-content: center;
-    z-index: 1;
-  }
-  
-  /* Ensure wrapper and actions stack correctly */
-  .media-view-container,
-  .media-wrapper,
-  .media-actions {
-    position: relative;
-    z-index: 10;
-  }
-  
-  .placeholder {
-    margin: 2rem;
-  }
+}
 
-  /* Audio player full-width */
-  .media-audio {
-    width: 100%;
-    height: 80px;
-  }
-  
-  /* Video player full-width & height-constrained */
+/* Video player - natural aspect ratio */
+.media-video {
+  width: 100%;
+  max-height: 55vh;
+  object-fit: contain;
+  border-radius: 12px;
+  background: #000;
+  display: block;
+}
+
+@media (min-width: 768px) {
   .media-video {
-    width: 100%;
-    max-height: 480px;
-    object-fit: contain;
+    max-height: 60vh;
   }
-
-  /* privacy toggle button */
-.privacy-toggle-btn {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  z-index: 50000;
-  background: rgba(0,0,0,0.4);
-  border: none;
-  color: #fff;
-  padding: 0.25rem 0.5rem;
-  border-radius: 0.25rem;
-  cursor: pointer;
 }
 
-/* screen overlay */
+@media (max-width: 480px) {
+  .media-video {
+    max-height: 55vh;
+  }
+}
+
+/* Audio player styling - enhanced for better UX */
+.media-audio {
+  width: 100%;
+  height: 60px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid rgba(255, 106, 0, 0.3);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  position: relative;
+  z-index: 1;
+  display: block;
+}
+
+/* Text content styling */
+.text-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.media-text {
+  white-space: pre-wrap;
+  overflow-y: auto;
+  height: 100%;
+  padding: 1.25rem 1.25rem 1.25rem 3.5rem;
+  background: rgba(255, 255, 255, 0.98);
+  border-radius: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  color: #1a1a1a;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  border: 1px solid rgba(200, 200, 200, 0.5);
+}
+
+@media (max-width: 480px) {
+  .media-text {
+    padding: 1rem 1rem 1rem 3rem;
+    font-size: 0.8125rem;
+  }
+}
+
+/* Embed wrappers for PDFs and iframes */
+.media-embed-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.media-pdf,
+.media-iframe {
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+  border: none;
+  background-color: #fafafa;
+  border-radius: 12px;
+  object-fit: contain;
+}
+
+@media (min-width: 768px) {
+  .media-pdf,
+  .media-iframe {
+    height: 100%;
+    min-height: 580px;
+  }
+}
+
+@media (max-width: 480px) {
+  .media-pdf,
+  .media-iframe {
+    height: 100%;
+  }
+  
+  /* Adjust audio container padding on mobile to avoid button overlap */
+  .audio-player-container {
+    padding: 0.75rem 0.75rem 0.75rem 3rem;
+    max-width: 100%;
+  }
+}
+
+/* Audio player with visual enhancement - streamlined design */
+.audio-player-container {
+  width: 100%;
+  max-width: 500px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, rgba(255, 106, 0, 0.1), rgba(255, 0, 204, 0.1));
+  border-radius: 16px;
+  border: 1px solid rgba(255, 106, 0, 0.2);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 8px 32px rgba(255, 106, 0, 0.15);
+  margin: 1.5rem auto;
+}
+
+.audio-visualizer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.audio-icon {
+  font-size: 2rem;
+  opacity: 0.9;
+  color: #FF6A00;
+}
+
+.audio-waves {
+  display: flex;
+  align-items: end;
+  gap: 0.25rem;
+  height: 2rem;
+}
+
+.wave-bar {
+  width: 4px;
+  background: linear-gradient(to top, #FF6A00, #FF00CC);
+  border-radius: 3px;
+  animation: wave 1.5s ease-in-out infinite;
+  box-shadow: 0 0 8px rgba(255, 106, 0, 0.3);
+}
+
+.wave-bar:nth-child(1) { height: 20%; animation-delay: 0s; }
+.wave-bar:nth-child(2) { height: 60%; animation-delay: 0.2s; }
+.wave-bar:nth-child(3) { height: 80%; animation-delay: 0.4s; }
+.wave-bar:nth-child(4) { height: 40%; animation-delay: 0.6s; }
+.wave-bar:nth-child(5) { height: 70%; animation-delay: 0.8s; }
+
+@keyframes wave {
+  0%, 100% { height: 20%; opacity: 0.5; }
+  50% { height: 100%; opacity: 1; }
+}
+
+/* Manual load buttons - Apple-inspired design */
+.media-load-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid rgba(255, 106, 0, 0.6);
+  border-radius: 12px;
+  color: #ffffff;
+  padding: 1rem 1.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  backdrop-filter: blur(10px);
+  text-align: center;
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 2rem;
+}
+
+.media-load-btn:hover {
+  background: rgba(255, 106, 0, 0.1);
+  border-color: #FF6A00;
+  transform: scale(1.02);
+}
+
+/* Loading and error states - refined presentation */
+.media-loading,
+.media-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.8);
+  text-align: center;
+  margin: 2rem;
+}
+
+.media-loading {
+  color: rgba(136, 136, 255, 0.9);
+}
+
+.media-error {
+  color: rgba(255, 107, 107, 0.9);
+}
+
+/* Media actions styling moved to app.css for consistency */
+
+/* Privacy screen overlay */
 .privacy-screen {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  /* half-opaque plus blur */
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(15px);
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(20px);
   z-index: 4;
+  border-radius: 12px;
+}
+
+/* Container positioning and layering */
+.media-view-container,
+.media-wrapper,
+.media-actions {
+  position: relative;
+  z-index: 10;
+}
+
+/* Simplified content transitions - desktop optimized */
+.content-fade-in {
+  animation: content-fade-in 0.2s ease-out;
+}
+
+@keyframes content-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Remove complex transitions that cause glitchiness */
+.media-wrapper {
+  /* Removed transition for stability */
+}
+
+.media-element {
+  /* Only keep essential transitions */
+  transition: opacity 0.2s ease;
+}
+
+/* Loading state for individual media elements */
+.media-loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  color: rgba(255, 255, 255, 0.8);
+  gap: 0.5rem;
+}
+
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Media container legacy support */
+.media-container {
+  flex: 1 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+/* Placeholder styling */
+.placeholder {
+  margin: 2rem;
+  color: rgba(255, 255, 255, 0.6);
+  text-align: center;
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  .media-view-container {
+    width: 95%;
+    padding-bottom: 1rem;
+  }
+  
+  .media-toolbar {
+    top: 0.5rem;
+    right: 0.5rem;
+  }
+  
+  .privacy-toggle-btn {
+    min-width: 32px;
+    height: 32px;
+    padding: 0.375rem;
+    font-size: 0.75rem;
+  }
+  
+  .open-tab-btn {
+    bottom: 0.5rem;
+    right: 0.5rem;
+    padding: 0.375rem 0.5rem;
+    font-size: 0.6875rem;
+  }
+  
+  .media-load-btn {
+    margin: 1rem;
+    padding: 0.75rem 1rem;
+    min-height: 80px;
+    font-size: 0.8125rem;
+  }
+  
+  .media-actions-float {
+    top: 0.5rem;
+    left: 0.5rem;
+    gap: 0.375rem;
+  }
+  
+  .action-toggle-btn {
+    min-width: 32px;
+    height: 32px;
+    padding: 0.375rem;
+  }
+  
+  .action-float-btn {
+    min-width: 28px;
+    height: 28px;
+    padding: 0.25rem;
+  }
+}
+
+/* Ensure floating buttons are above all content */
+.media-wrapper {
+  position: relative;
+}
+
+.media-actions-float,
+.media-toolbar {
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.media-actions-float > *,
+.media-toolbar > * {
+  pointer-events: auto;
+}
+
+/* Subtle fade on hover for less obstruction */
+.media-wrapper:hover .media-actions-float,
+.media-wrapper:hover .media-toolbar {
+  opacity: 0.7;
+}
+
+.media-actions-float:hover,
+.media-toolbar:hover {
+  opacity: 1;
 }

@@ -1,112 +1,282 @@
-/* src/styles/details-drawer.css */
-/* Backdrop overlay */
+/* src/styles/details-drawer.css - Apple-inspired refined design */
+
+/* Backdrop overlay - consistent with channels drawer */
 .details-backdrop {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(6px);
-    z-index: 50;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s ease;
-  }
-  .details-backdrop.open {
-    opacity: 1;
-    pointer-events: all;
-  }
-  
-  /* Drawer panel */
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(6px);
+  z-index: 50;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+.details-backdrop.open {
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* Main drawer panel - refined glass morphism */
+.details-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 100%;
+  max-width: 420px;
+  height: 100vh;
+  background: rgba(15, 1, 33, 0.95);
+  backdrop-filter: blur(20px);
+  color: #ffffff;
+  z-index: 60;
+  padding: 1rem 1.25rem 1.25rem;
+  overflow-y: auto;
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  -webkit-overflow-scrolling: touch;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+.details-drawer.open {
+  transform: translateX(0);
+}
+
+/* Header - clean and refined */
+.details-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.details-header h2 {
+  margin: 0;
+  font-size: 1.375rem;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+}
+
+/* Close button - larger and easier to click */
+.details-close-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+  color: #ffffff;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  margin: -4px;
+  padding: 0;
+}
+.details-close-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+}
+.details-close-btn:active {
+  transform: scale(0.95);
+}
+
+/* Content sections with visual hierarchy */
+.details-content {
+  margin-top: 0;
+}
+
+/* Information sections */
+.info-section {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.info-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  margin: 0 0 0.75rem 0;
+  opacity: 0.8;
+}
+
+/* Data list styling */
+.details-content dl {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  line-height: 1.4;
+}
+
+.info-item:last-child {
+  margin-bottom: 0;
+}
+
+.info-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+  min-width: fit-content;
+}
+
+.info-value {
+  font-size: 0.8125rem;
+  color: #ffffff;
+  text-align: right;
+  word-break: break-all;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  letter-spacing: 0.015em;
+}
+
+/* Links styling */
+.info-value a {
+  color: rgba(255, 106, 0, 0.9);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+.info-value a:hover {
+  color: #FF6A00;
+  text-decoration: underline;
+}
+
+/* File info specific styling */
+.file-info .info-value {
+  font-family: inherit;
+  letter-spacing: normal;
+}
+
+/* Refined tag styling */
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-top: 0.5rem;
+}
+
+.tag-item {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.375rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #ffffff;
+  transition: all 0.2s ease;
+  line-height: 1.2;
+}
+
+.tag-item:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: scale(1.02);
+}
+
+.tag-name {
+  color: rgba(255, 106, 0, 0.9);
+  font-weight: 600;
+}
+
+/* Show more/less button */
+.more-tags {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: rgba(255, 106, 0, 0.9);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.375rem 0.75rem;
+  transition: all 0.2s ease;
+}
+.more-tags:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #FF6A00;
+}
+
+/* ArDrive specific styling */
+.ardrive-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ardrive-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem;
+  background: rgba(0, 255, 225, 0.05);
+  border: 1px solid rgba(0, 255, 225, 0.15);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  text-decoration: none;
+  color: inherit;
+}
+
+.ardrive-link:hover {
+  background: rgba(0, 255, 225, 0.1);
+  transform: scale(1.01);
+}
+
+.ardrive-icon {
+  font-size: 1rem;
+  color: #00FFE1;
+}
+
+.ardrive-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.ardrive-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #00FFE1;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+  margin-bottom: 0.125rem;
+}
+
+.ardrive-id {
+  font-size: 0.8125rem;
+  font-family: ui-monospace, 'SF Mono', Consolas, monospace;
+  color: rgba(255, 255, 255, 0.8);
+  word-break: break-all;
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
   .details-drawer {
-    position: fixed;
-    top: 0;
-    right: 0;
-    width: 100%;
-    max-width: 600px;
-    height: 100vh;
-    background: #0f0121;
-    color: #f0f0f0;
-    z-index: 60;
-    padding: var(--gap);
-    overflow-y: auto;
-    transform: translateX(100%);
-    transition: transform 0.3s ease;
-    -webkit-overflow-scrolling: touch;
-  }
-  .details-drawer.open {
-    transform: translateX(0);
+    max-width: 100%;
+    padding: 1rem;
   }
   
-  /* Header */
-  .details-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: var(--gap);
-  }
-  .details-header h2 {
-    margin: 0;
-    font-size: 1.5rem;
-  }
-  .details-close-btn {
-    background: none;
-    border: none;
-    font-size: 1.25rem;
-    cursor: pointer;
-    color: var(--accent);
+  .info-item {
+    flex-direction: column;
+    gap: 0.25rem;
   }
   
-  /* Content area with generous spacing */
-  .details-content {
-    margin-top: var(--gap);
+  .info-value {
+    text-align: left;
   }
-  .details-content dl {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
-  .details-content dt {
-    font-weight: 600;
-    margin-top: var(--gap);
-  }
-  .details-content dd {
-    margin: 0.25rem 0 0 0;
-    line-height: 1.2;
-  }
-  
-  /* Tags as chips */
-  .tag-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-top: 0.5rem;
-  }
-  .tag-item {
-    background: rgba(255, 255, 255, 0.1);
-    padding: 0.25rem 0.75rem;
-    border-radius: 0.25rem;
-    font-size: 0.875rem;
-  }
-  
-  /* JSON view styling */
-  .details-json {
-    background: #222;
-    padding: var(--gap);
-    margin-top: var(--gap);
-    border-radius: 0.25rem;
-    font-family: monospace;
-    font-size: 0.875rem;
-    white-space: pre-wrap;
-    color: #ccc;
-  }
-  
-  .more-tags {
-    background: none;
-    border: none;
-    color: var(--accent);
-    cursor: pointer;
-    font-size: 0.875rem;
-    margin-top: var(--gap);
-  }
+}

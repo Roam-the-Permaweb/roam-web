@@ -1,0 +1,234 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Development Commands
+
+### Core Commands
+- `npm run dev` - Start local development server with Vite
+- `npm run build` - TypeScript compilation + production build (outputs to /dist)
+- `npm run preview` - Preview production build locally
+
+### Testing Commands
+- `npm test` - Run tests in watch mode
+- `npm run test:run` - Run tests once
+- `npm run test:coverage` - Run tests with coverage report
+- `npm run test:ui` - Open Vitest UI for interactive testing
+
+### Build Requirements
+- Build succeeds when `tsc -b && vite build` completes without errors
+- Deploy the static /dist folder to Arweave via ArDrive, ArLink, Permaweb Deploy, etc.
+
+## Architecture Overview
+
+### Core Application Structure
+**Roam v0.1.0** is a Preact-based PWA for discovering random Arweave content. The app uses a shuffle-play interface where users tap "Next" to explore transactions filtered by content type (images, videos, music, websites, text, ArFS files, or everything). This release introduces major UI/UX improvements with Apple-inspired design and advanced date-based filtering.
+
+### Key Architectural Patterns
+
+**Engine Layer** (`/src/engine/`):
+- `query.ts` - GraphQL API calls to Goldsky endpoints for transaction discovery
+- `fetchQueue.ts` - Sliding window-based transaction queue with background refill mechanism  
+- `history.ts` - IndexedDB-persisted navigation history using idb-keyval
+
+**Content Discovery Algorithm**:
+The app uses a sophisticated windowing system to efficiently explore Arweave's 1.6M+ blocks:
+- "New" content: Slides from recent blocks downward (most recent first)
+- "Old" content: Random windows in blocks 100K-1.6M range
+- Window size: 10K blocks per fetch for optimal GraphQL performance
+- Auto-refills queue when <3 items remain to prevent loading delays
+
+**Deep Linking System**:
+URL parameters drive content initialization:
+- `txid` - Direct transaction link
+- `ownerAddress` - Filter by Arweave address
+- `appName` - Filter by App-Name tag  
+- `minBlock`/`maxBlock` - Custom block range
+- `channel` - Media type filter
+
+**State Management**:
+- Custom hook pattern for modular state management
+- Main app state via `useAppState` hook
+- Navigation logic in `useNavigation` hook
+- Deep linking via `useDeepLink` hook
+- Date filtering via `useDateRangeSlider` hook
+- Local history persisted via IndexedDB
+- URL parsing drives initial state
+
+### Component Architecture
+
+**Core Components** (`/src/components/`):
+- `MediaView.tsx` - Universal content renderer with type-specific handling and floating actions
+- `DetailsDrawer.tsx` - Apple-inspired transaction metadata panel  
+- `DateRangeSlider.tsx` - **NEW**: Advanced date-based filtering with block conversion
+- `TransactionInfo.tsx` - **NEW**: Compact metadata footer with owner/tx/date info
+- `ZoomOverlay.tsx` - Full-screen media viewer
+- `Interstitial.tsx` - Advertisement overlay
+- `AppHeader.tsx` - Application header with branding
+- `AppControls.tsx` - Navigation controls with Apple-inspired buttons
+- `AppFooter.tsx` - Fixed footer with app information
+- `ChannelsDrawer.tsx` - Content type and date filtering drawer
+- `AboutModal.tsx` - Application information modal
+- `ConsentModal.tsx` - NSFW content consent dialog
+
+**UI/UX Design System (v0.1.0)**:
+- **Apple-inspired design language** with glass morphism effects
+- **Dark theme** with orange/red gradient accents (#FF6A00 to #FF00CC)
+- **Floating action menus** for media controls (share, download, open, details)
+- **Smooth transitions** and loading states throughout
+- **Content-aware sizing** - different heights for images vs text/websites
+- **Mobile-first responsive design** with touch-friendly interactions
+
+**Styling System**:
+- UnoCSS for utility-first CSS
+- Component-specific CSS files in `/src/styles/` with Apple-inspired aesthetics
+- CSS Grid and Flexbox for responsive layouts
+- PWA-ready with vite-plugin-pwa
+- **NEW**: Content-type specific CSS classes for dynamic media sizing
+
+### Advanced Date Filtering System (v0.1.0)
+
+**Date-to-Block Conversion** (`/src/utils/dateBlockUtils.ts`):
+- **Binary search algorithm** for precise date-to-block mapping
+- **GraphQL integration** for efficient block timestamp queries
+- **Intelligent caching** to avoid redundant API calls
+- **Estimation fallbacks** for improved performance
+- **Range validation** against Arweave blockchain history
+
+**DateRangeSlider Features**:
+- Visual calendar date selection
+- Real-time block height conversion and display
+- Validation against Arweave timeline (Genesis: June 2018)
+- Error handling for invalid ranges and network failures
+- Integration with main content discovery queue
+
+**Performance Optimizations**:
+- Cached binary search results for frequently accessed dates
+- Range queries for better GraphQL efficiency
+- Graceful degradation when exact search fails
+- Background estimation for responsive UI updates
+
+### Content Type System
+
+**Media Types** (defined in `constants.ts`):
+- `images` - PNG, JPEG, WebP, GIF
+- `videos` - MP4, WebM  
+- `music` - MP3, WAV with enhanced audio player and wave visualization
+- `websites` - HTML, Arweave manifests
+- `text` - Markdown, PDF with improved readability
+- `arfs` - ArFS file metadata (requires Entity-Type: file)
+- `everything` - Union of all above types
+
+**Enhanced Media Handling (v0.1.0)**:
+- **Smart loading thresholds** - manual load buttons for large files
+- **Content-specific sizing** - images use max-height, text/websites use fixed containers
+- **Progressive enhancement** based on file size and type
+- **ArFS metadata resolution** with automatic file type detection
+- **Improved text rendering** with white backgrounds for readability
+- **Enhanced audio player** with visual wave animation
+
+**ArFS Special Handling**:
+ArFS media type fetches JSON metadata first, then extracts `dataTxId` for actual file content.
+
+### Configuration
+
+**Environment Variables**:
+- `VITE_GATEWAYS_GRAPHQL` - Comma-separated GraphQL endpoints (required)
+- `VITE_GATEWAYS_DATA_SOURCE` - Content delivery gateways
+
+**Gateway Configuration**:
+App supports "self" gateway mapping that derives data gateway from current hostname (e.g., `roam_user.ardrive.net` → `ardrive.net`).
+
+### Key Technical Constraints
+
+**Performance Considerations**:
+- Content auto-skips on 404/corruption (404-resistant design)
+- No autoplay for bandwidth conservation
+- Background queue refilling prevents loading delays
+- Smart loading thresholds for large files
+- **NEW**: Content-type aware rendering optimizations
+
+**Arweave Integration**:
+- Uses public GraphQL APIs (no private keys required)
+- All content fetched client-side
+- Permanent hosting on Arweave blockchain
+- AR.IO gateway integration for fast delivery
+- **NEW**: Enhanced GraphQL queries for date/block operations
+
+**Mobile-First Design**:
+- Touch-friendly navigation with Apple-inspired controls
+- PWA installable on mobile devices  
+- Works offline after installation
+- Thumb-friendly single-tap exploration
+- **NEW**: Floating action menus optimized for mobile usage
+
+### Testing Infrastructure
+
+**Testing Framework**: Vitest with jsdom environment for comprehensive testing
+
+**Test Structure**:
+- Unit tests for engine functions (`/src/engine/*.test.ts`)
+- Utility function tests (`/src/utils/*.test.ts`)
+- Test utilities and mocks in `/src/test/utils.ts`
+- Global test setup in `/src/test/setup.ts`
+
+**Engine Test Coverage**:
+- `query.test.ts`: GraphQL operations, block height fetching, error handling
+- `history.test.ts`: IndexedDB navigation history, state management
+- `fetchQueue.test.ts`: Transaction queue initialization, filtering, configuration
+- **NEW**: `dateBlockUtils.test.ts`: Date/block conversion, binary search, caching
+
+**Testing Patterns**:
+- Mock external dependencies (fetch, localStorage, idb-keyval, window.location)
+- Use realistic transaction data for consistent testing
+- Focus on business logic rather than UI components
+- Comprehensive error handling and edge case coverage
+- **NEW**: Binary search algorithm testing with various edge cases
+
+**Current Test Results**: All tests pass, ensuring robust core functionality.
+
+### v0.1.0 Release Highlights
+
+**Major Features Added**:
+- **Advanced date-based filtering** with visual date range selection
+- **Apple-inspired UI redesign** with glass morphism and smooth transitions
+- **Floating action menus** for better space utilization and mobile UX
+- **Enhanced media rendering** with content-type specific optimizations
+- **Smart loading system** with file size-based thresholds
+- **Improved audio player** with visual wave animations
+- **Better text readability** with white backgrounds and proper typography
+
+**Technical Improvements**:
+- **Comprehensive code documentation** with detailed comments
+- **Production-ready logging** with debug statements removed
+- **Enhanced error handling** throughout the application
+- **Performance optimizations** for media rendering and date conversion
+- **Mobile-optimized touch interactions** and responsive design
+
+**User Experience Enhancements**:
+- **Smooth content transitions** without glitchy animations
+- **Content-aware sizing** prevents scrolling issues
+- **Progressive loading** for large files with bandwidth consideration
+- **Clear visual feedback** for loading states and user actions
+- **Accessible design patterns** following modern web standards
+
+### Development Guidelines
+
+**Code Style**:
+- Use comprehensive JSDoc comments for complex functions
+- Remove debug console.log statements before production
+- Follow Apple-inspired design principles for new UI components
+- Implement proper error handling and loading states
+- Test date/block conversion functions thoroughly
+
+**Performance**:
+- Use content-type specific CSS classes for optimal rendering
+- Implement smart loading thresholds for different media types
+- Cache date/block conversion results to avoid redundant API calls
+- Use GraphQL efficiently with proper pagination and filtering
+
+**Mobile Optimization**:
+- Design with touch-first interactions
+- Use floating menus to save vertical space
+- Implement proper responsive breakpoints
+- Test on various mobile devices and screen sizes

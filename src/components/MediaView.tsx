@@ -1,7 +1,34 @@
+/**
+ * MediaView - Universal Content Renderer
+ * 
+ * Renders different types of Arweave content with optimized user experience:
+ * 
+ * Supported Content Types:
+ * - Images: Progressive loading with zoom capability
+ * - Videos: Native HTML5 player with metadata preload
+ * - Audio: Enhanced player with visual wave animation
+ * - Text/Markdown: Syntax-highlighted with proper typography
+ * - PDFs: Embedded iframe viewer
+ * - Websites/HTML: Sandboxed iframe rendering
+ * - ArFS Files: Metadata resolution with file type detection
+ * 
+ * Smart Loading Features:
+ * - Manual load buttons for large files (bandwidth consideration)
+ * - Progressive enhancement based on file size thresholds
+ * - Automatic fallback and error handling for corrupted content
+ * - Privacy screen toggle for NSFW content protection
+ * 
+ * UI/UX Features:
+ * - Apple-inspired design with floating action menus
+ * - Content-aware sizing (images/videos vs text/websites)
+ * - Smooth transitions and loading states
+ * - Mobile-optimized touch interactions
+ */
 import { useState, useEffect, useRef } from 'preact/hooks';
 import '../styles/media-view.css';
 import { GATEWAY_DATA_SOURCE } from '../engine/fetchQueue';
 import type { TxMeta } from '../constants';
+import { Icons, getMediaTypeIcon } from './Icons';
 
 const IMAGE_LOAD_THRESHOLD = 25 * 1024 * 1024;
 const VIDEO_LOAD_THRESHOLD = 200 * 1024 * 1024;
@@ -15,6 +42,10 @@ export interface MediaViewProps {
   onPrivacyToggle: () => void;
   onZoom?: (src: string) => void;
   onCorrupt?: (txMeta: TxMeta) => void;
+  loading?: boolean;
+  onShare?: () => void;
+  onDownload?: () => void;
+  onOpenInNewTab?: () => void;
 }
 
 export const MediaView = ({
@@ -23,7 +54,10 @@ export const MediaView = ({
   privacyOn,
   onPrivacyToggle,
   onZoom,
-  onCorrupt
+  onCorrupt,
+  onShare,
+  onDownload,
+  onOpenInNewTab
 }: MediaViewProps) => {
   const { id, tags } = txMeta;
 
@@ -44,6 +78,18 @@ export const MediaView = ({
     'application/x.arweave-manifest+json'
   ];
   const isWide = wideContentTypes.includes(contentType);
+  
+  // Determine content type for height styling
+  const getContentTypeClass = () => {
+    if (contentType === 'application/pdf') return 'content-pdf';
+    if (['text/plain', 'text/markdown'].includes(contentType)) return 'content-text';
+    if (contentType.startsWith('text/html') || 
+        contentType === 'application/xhtml+xml' || 
+        contentType.startsWith('application/x.arweave-manifest') || 
+        contentType.startsWith('application/json')) return 'content-website';
+    if (contentType.startsWith('audio/')) return 'content-audio';
+    return '';
+  };
 
   const [manualLoad, setManualLoad] = useState(contentType.startsWith('image/') && size > IMAGE_LOAD_THRESHOLD);
   const [manualLoadVideo, setManualLoadVideo] = useState(contentType.startsWith('video/') && size > VIDEO_LOAD_THRESHOLD);
@@ -52,6 +98,8 @@ export const MediaView = ({
   const [textContent, setTextContent] = useState<string | null>(null);
   const [loadingText, setLoadingText] = useState(false);
   const [errorText, setErrorText] = useState<string | null>(null);
+  const [fadeIn, setFadeIn] = useState(false);
+  const [actionsExpanded, setActionsExpanded] = useState(false);
 
   // Reset flags when tx changes
 useEffect(() => {
@@ -68,6 +116,14 @@ useEffect(() => {
   setTextContent(null);
   setLoadingText(false);
   setErrorText(null);
+  setFadeIn(false);
+  
+  // Trigger fade in after a short delay for smooth transition
+  const timer = setTimeout(() => {
+    setFadeIn(true);
+  }, 100);
+  
+  return () => clearTimeout(timer);
 }, [id, contentType, size]);
 
   // Fetch plaintext
@@ -150,13 +206,27 @@ useEffect(() => {
     }
     if (contentType.startsWith('audio/')) {
       return (
-        <audio
-          className="media-element media-audio"
-          src={manualLoadAudio ? undefined : directUrl}
-          controls
-          preload="metadata"
-          onError={() => onCorrupt?.(txMeta)}
-        />
+        <div className="audio-player-container">
+          <div className="audio-visualizer">
+            <div className="audio-icon">
+              <Icons.Music size={32} />
+            </div>
+            <div className="audio-waves">
+              <div className="wave-bar"></div>
+              <div className="wave-bar"></div>
+              <div className="wave-bar"></div>
+              <div className="wave-bar"></div>
+              <div className="wave-bar"></div>
+            </div>
+          </div>
+          <audio
+            className="media-element media-audio"
+            src={manualLoadAudio ? undefined : directUrl}
+            controls
+            preload="metadata"
+            onError={() => onCorrupt?.(txMeta)}
+          />
+        </div>
       );
     }
 
@@ -174,7 +244,6 @@ useEffect(() => {
       return (
         <div className="media-element text-container">
           <pre className="media-text">{textContent}</pre>
-          <a className="open-tab-btn" href={directUrl} target="_blank" rel="noopener noreferrer">Open text in new tab</a>
         </div>
       );
     }
@@ -183,7 +252,6 @@ useEffect(() => {
       return (
         <div className="media-embed-wrapper">
           <iframe ref={iframeRef} className="media-pdf" src={directUrl} title="PDF Viewer" />
-          <a className="open-tab-btn" href={directUrl} target="_blank" rel="noopener noreferrer">Open PDF in new tab</a>
         </div>
       );
     }
@@ -203,7 +271,6 @@ useEffect(() => {
             sandbox="allow-scripts allow-same-origin"
             title="Permaweb content preview"
           />
-          <a className="open-tab-btn" href={directUrl} target="_blank" rel="noopener noreferrer">Open in new tab</a>
         </div>
       );
     }
@@ -211,28 +278,63 @@ useEffect(() => {
     return <div className="media-error">Unsupported media type: {contentType}</div>;
   };
 
+  // Remove skeleton loader - just show content directly
+
   return (
-    <div className="media-view-container">
+    <div className={`media-view-container ${fadeIn ? 'content-fade-in' : ''}`}>
       <div className="media-toolbar">
         <button
           className="privacy-toggle-btn"
           onClick={onPrivacyToggle}
           title={privacyOn ? 'Hide Privacy Screen' : 'Show Privacy Screen'}
         >
-          {privacyOn ? '🔓' : '🔒'}
+          {privacyOn ? <Icons.Eye /> : <Icons.EyeOff />}
         </button>
       </div>
 
-      <div className={`media-wrapper ${isWide ? 'wide' : ''}`}>
+      <div className={`media-wrapper ${isWide ? 'wide' : ''} ${getContentTypeClass()}`}>
         {renderMedia()}
         {privacyOn && <div className="privacy-screen" />}
-      </div>
-
-      {onDetails && (
-        <div className="media-actions">
-          <button className="details-btn" onClick={onDetails}>Details</button>
+        
+        {/* Collapsible media actions */}
+        <div className="media-actions-float">
+          <button 
+            className="action-toggle-btn" 
+            onClick={() => setActionsExpanded(!actionsExpanded)}
+            title={actionsExpanded ? "Hide actions" : "Show actions"}
+          >
+            {actionsExpanded ? <Icons.CloseMenu size={18} /> : <Icons.Menu size={18} />}
+          </button>
+          
+          {actionsExpanded && (
+            <div className="actions-menu">
+              {onDetails && (
+                <button className="action-float-btn" onClick={onDetails} title="Details">
+                  {(() => {
+                    const MediaTypeIcon = getMediaTypeIcon(contentType);
+                    return <MediaTypeIcon size={18} />;
+                  })()}
+                </button>
+              )}
+              {onOpenInNewTab && (
+                <button className="action-float-btn" onClick={onOpenInNewTab} title="Open">
+                  <Icons.Open size={18} />
+                </button>
+              )}
+              {onShare && (
+                <button className="action-float-btn" onClick={onShare} title="Share">
+                  <Icons.Share size={18} />
+                </button>
+              )}
+              {onDownload && (
+                <button className="action-float-btn" onClick={onDownload} title="Download">
+                  <Icons.Download size={18} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 };
