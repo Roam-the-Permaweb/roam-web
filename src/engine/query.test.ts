@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { getCurrentBlockHeight, fetchTxMetaById } from './query'
+import { getCurrentBlockHeight, fetchTxMetaById, fetchTxsRange } from './query'
 import { mockFetchResponse, resetMocks } from '../test/utils'
 
 describe('Query Engine', () => {
@@ -83,5 +83,50 @@ describe('Query Engine', () => {
 
       await expect(fetchTxMetaById('test-tx-id')).rejects.toThrow('All gateways failed – unable to fetch tx by ID')
     }, { timeout: 10000 })
+  })
+
+  describe('fetchTxsRange', () => {
+    it('should paginate using edge cursors', async () => {
+      const tx1 = { id: 'id1' }
+      const tx2 = { id: 'id2' }
+      const tx3 = { id: 'id3' }
+
+      const firstPage = {
+        data: {
+          transactions: {
+            edges: [
+              { cursor: 'c1', node: tx1 },
+              { cursor: 'c2', node: tx2 }
+            ],
+            pageInfo: { hasNextPage: true }
+          }
+        }
+      }
+
+      const secondPage = {
+        data: {
+          transactions: {
+            edges: [
+              { cursor: 'c3', node: tx3 }
+            ],
+            pageInfo: { hasNextPage: false }
+          }
+        }
+      }
+
+      const fetchMock = vi
+        .fn()
+        .mockResolvedValueOnce(mockFetchResponse(firstPage))
+        .mockResolvedValueOnce(mockFetchResponse(secondPage))
+
+      global.fetch = fetchMock as any
+
+      const result = await fetchTxsRange('images', 1, 10)
+
+      expect(result).toEqual([tx1, tx2, tx3])
+
+      const secondCallBody = JSON.parse(fetchMock.mock.calls[1][1].body)
+      expect(secondCallBody.variables.after).toBe('c2')
+    })
   })
 })

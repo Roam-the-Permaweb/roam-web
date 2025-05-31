@@ -152,7 +152,8 @@ export async function fetchTxsRange(
           if (!allTxs.find((t) => t.id === tx.id)) allTxs.push(tx);
         }
         hasNext = data.transactions.pageInfo.hasNextPage;
-        after = data.transactions.cursor;
+        const lastEdge = edges[edges.length - 1];
+        after = lastEdge?.cursor ?? null;
       }
 
       // shuffle allTxs...
