@@ -540,11 +540,115 @@
   width: 100%;
 }
 
-/* Placeholder styling */
+/* Enhanced placeholder styling */
 .placeholder {
   margin: 2rem;
-  color: rgba(255, 255, 255, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
   text-align: center;
+}
+
+.placeholder-content {
+  background: rgba(15, 1, 33, 0.8);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  padding: 3rem 2rem;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+}
+
+.placeholder-icon {
+  font-size: 4rem;
+  margin-bottom: 1.5rem;
+  opacity: 0.9;
+}
+
+.placeholder-content h3 {
+  margin: 0 0 1rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+}
+
+.placeholder-content p {
+  margin: 0 0 2rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.placeholder-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.placeholder-btn {
+  padding: 0.875rem 1.5rem;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.placeholder-btn.primary {
+  background: linear-gradient(135deg, #FF6A00, #FF00CC);
+  color: #ffffff;
+  box-shadow: 0 6px 16px rgba(255, 106, 0, 0.3);
+}
+
+.placeholder-btn.primary:hover {
+  transform: scale(1.02);
+  box-shadow: 0 8px 20px rgba(255, 106, 0, 0.4);
+}
+
+.placeholder-btn.secondary {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.placeholder-btn.secondary:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+  transform: scale(1.02);
+}
+
+@media (max-width: 480px) {
+  .placeholder {
+    margin: 1rem;
+    min-height: 50vh;
+  }
+  
+  .placeholder-content {
+    padding: 2rem 1.5rem;
+  }
+  
+  .placeholder-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+  }
+  
+  .placeholder-content h3 {
+    font-size: 1.25rem;
+  }
+  
+  .placeholder-btn {
+    padding: 0.75rem 1.25rem;
+    font-size: 0.875rem;
+  }
 }
 
 /* Responsive adjustments */

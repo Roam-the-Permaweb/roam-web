@@ -226,7 +226,23 @@ export function App() {
 
       <main ref={mainRef} className="media-container">
         {appState.loading && !appState.currentTx && <div className="loading">Loading…</div>}
-        {!appState.currentTx && !appState.loading && <div className="placeholder">Feeling curious? Tap "Next" to explore — or "Roam" to spin the dice.</div>}
+        {!appState.currentTx && !appState.loading && (
+          <div className="placeholder">
+            <div className="placeholder-content">
+              <div className="placeholder-icon">🎲</div>
+              <h3>Ready to Explore the Permaweb?</h3>
+              <p>Discover random content from Arweave's permanent storage</p>
+              <div className="placeholder-actions">
+                <button onClick={handleNext} className="placeholder-btn primary">
+                  🎯 Start Exploring
+                </button>
+                <button onClick={handleRoam} className="placeholder-btn secondary">
+                  🎲 Random Deep Dive
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {appState.currentTx && (
           <>
             <MediaView
@@ -253,7 +269,7 @@ export function App() {
       </main>
 
       <AppControls
-        onReset={navigation.handleReset}
+        onReset={() => navigation.handleReset(appState.channel)}
         onBack={navigation.handleBack}
         onNext={handleNext}
         onRoam={handleRoam}
