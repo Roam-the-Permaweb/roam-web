@@ -215,7 +215,7 @@ export function App() {
       
       {/* Interstitial overlay */}
       {appState.showInterstitial && (
-        <Interstitial src="/assets/static-ad.jpg" onClose={handleCloseAd} />
+        <Interstitial src="/static-ad.jpg" onClose={handleCloseAd} />
       )}
       
       <AppHeader />
