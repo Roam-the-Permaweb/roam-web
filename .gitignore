@@ -13,6 +13,7 @@ node_modules
 # Build output
 dist
 dist-ssr
+dev-dist
 
 # Local files
 *.local
