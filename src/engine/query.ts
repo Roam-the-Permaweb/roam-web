@@ -1,13 +1,75 @@
 import { logger } from "../utils/logger";
-import { CONTENT_TYPES, type MediaType, type TxMeta } from "../constants";
+import { CONTENT_TYPES, APP_OWNERS, type MediaType, type TxMeta } from "../constants";
 
 // --------------------------------------------------------------------------
 // Configuration & Constants
 // --------------------------------------------------------------------------
 export const GATEWAYS_GRAPHQL =
   import.meta.env.VITE_GATEWAYS_GRAPHQL?.split(",") ?? [];
-const PAGE_SIZE = 1000;
+const PAGE_SIZE = 100;
 export const DEFAULT_HEIGHT = 1666042;
+
+// Progressive pagination constants
+export const INITIAL_PAGE_LIMIT = 2; // Fetch 2 pages initially (200 transactions)
+export const REFILL_PAGE_LIMIT = 1;  // Fetch 1 page for refills (100 transactions)
+
+// Rate limiting to prevent GraphQL overload
+class RateLimiter {
+  private requestTimes: number[] = [];
+  private readonly maxRequests: number = 5; // 5 requests per minute per gateway
+  private readonly windowMs: number = 60000;
+
+  async waitIfNeeded(): Promise<void> {
+    const now = Date.now();
+    this.requestTimes = this.requestTimes.filter(t => t > now - this.windowMs);
+    
+    if (this.requestTimes.length >= this.maxRequests) {
+      const oldestRequest = this.requestTimes[0];
+      const waitTime = oldestRequest + this.windowMs - now + 1000; // Add 1s buffer
+      logger.debug(`Rate limit reached, waiting ${waitTime}ms`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
+    this.requestTimes.push(now);
+  }
+}
+
+const rateLimiter = new RateLimiter();
+
+// Cursor storage for continuing pagination
+interface StoredCursor {
+  cursor: string;
+  media: string;
+  minHeight: number;
+  maxHeight: number;
+  owner?: string;
+  appName?: string;
+  timestamp: number;
+}
+
+const cursorStorage = new Map<string, StoredCursor>();
+let cursorCleanupInterval: ReturnType<typeof setInterval> | null = null;
+
+// Start cursor cleanup interval
+function startCursorCleanup() {
+  if (!cursorCleanupInterval) {
+    cursorCleanupInterval = setInterval(() => {
+      const now = Date.now();
+      for (const [key, cursor] of cursorStorage.entries()) {
+        if (now - cursor.timestamp > 300000) { // 5 minute expiry
+          cursorStorage.delete(key);
+          logger.debug(`Cleaned up expired cursor for ${key}`);
+        }
+      }
+    }, 60000); // Check every minute
+  }
+}
+
+startCursorCleanup();
+
+function getCursorKey(media: string, minHeight: number, maxHeight: number, owner?: string, appName?: string): string {
+  return `${media}:${minHeight}-${maxHeight}:${owner || 'none'}:${appName || 'none'}`;
+}
 
 if (GATEWAYS_GRAPHQL.length === 0) {
   logger.error(
@@ -44,40 +106,79 @@ export async function getCurrentBlockHeight(gateway: string): Promise<number> {
 async function fetchWithRetry(
   gw: string,
   payload: any,
-  attempts = 4,
-  delay = 500
+  attempts = 3
 ): Promise<any> {
-  try {
-    const res = await fetch(`${gw}/graphql`, payload);
-    const json = await res.json();
-    if (json.errors?.length) {
-      throw new Error(json.errors.map((e: any) => e.message).join("; "));
+  let lastError: Error | null = null;
+  
+  for (let i = 0; i < attempts; i++) {
+    try {
+      // Apply rate limiting
+      await rateLimiter.waitIfNeeded();
+      
+      const res = await fetch(`${gw}/graphql`, payload);
+      
+      // Don't retry on client errors (4xx)
+      if (res.status >= 400 && res.status < 500) {
+        throw new Error(`Client error: ${res.status} ${res.statusText}`);
+      }
+      
+      const json = await res.json();
+      if (json.errors?.length) {
+        // Check if errors are retryable
+        const errorMessages = json.errors.map((e: any) => e.message).join("; ");
+        const isRetryable = errorMessages.includes('timeout') || 
+                           errorMessages.includes('rate limit') ||
+                           errorMessages.includes('server error');
+        
+        if (!isRetryable || i === attempts - 1) {
+          throw new Error(errorMessages);
+        }
+        lastError = new Error(errorMessages);
+      } else {
+        return json.data;
+      }
+    } catch (err) {
+      lastError = err as Error;
+      
+      // Don't retry on non-retryable errors
+      if (err instanceof Error && err.message.startsWith('Client error:')) {
+        throw err;
+      }
+      
+      if (i < attempts - 1) {
+        // Exponential backoff with jitter
+        const baseDelay = Math.min(1000 * Math.pow(2, i), 10000); // Max 10s
+        const jitter = Math.random() * baseDelay * 0.3; // ±30% jitter
+        const totalDelay = Math.floor(baseDelay + jitter);
+        
+        logger.debug(`Retry ${i + 1}/${attempts} after ${totalDelay}ms delay`);
+        await new Promise(r => setTimeout(r, totalDelay));
+      }
     }
-    return json.data;
-  } catch (err) {
-    if (attempts > 1) {
-      await new Promise((r) => setTimeout(r, delay));
-      return fetchWithRetry(gw, payload, attempts - 1, delay * 2);
-    }
-    throw err;
   }
+  
+  throw lastError || new Error('Unknown error in fetchWithRetry');
 }
 
+/**
+ * Progressive pagination GraphQL fetching with cursor storage
+ * @param pageLimit - Max number of pages to fetch (null = fetch all)
+ * @param isRefill - Whether this is a background refill operation
+ */
 export async function fetchTxsRange(
   media: MediaType,
   minHeight: number,
   maxHeight: number,
   owner?: string,
   appName?: string,
-): Promise<TxMeta[]> {
+  pageLimit: number | null = null,
+  isRefill: boolean = false
+): Promise<{ txs: TxMeta[], hasMore: boolean, cursor?: string }> {
   const ct = CONTENT_TYPES[media];
 
-  // These apps all use a specific wallet for their users.
-  // TODO - set this to allow for multiple owners
-  if (appName === 'Paragraph') {
-    owner = "w5AtiFsNvORfcRtikbdrp2tzqixb05vdPw-ZhgVkD70"
-  } else if (appName === 'Manifold') {
-    owner = "NVkSolD-1AJcJ0BMfEASJjIuak3Y6CvDJZ4XOIUbU9g"
+  // Set app-specific owner addresses for content curation
+  if (appName && APP_OWNERS[appName]) {
+    owner = APP_OWNERS[appName];
   }
   const ownersArg = owner ? `owners: ["${owner}"],` : "";
   const appNameArg = appName ? `{ name: "App-Name", values: "${appName}" }` : ""
@@ -122,14 +223,28 @@ export async function fetchTxsRange(
       }
   }`;
 
+  // Check for stored cursor if this is a refill
+  const cursorKey = getCursorKey(media, minHeight, maxHeight, owner, appName);
+  let startCursor: string | null = null;
+  
+  if (isRefill) {
+    const stored = cursorStorage.get(cursorKey);
+    if (stored && Date.now() - stored.timestamp < 300000) { // 5 minute expiry
+      startCursor = stored.cursor;
+      logger.debug(`Using stored cursor for refill: ${startCursor.substring(0, 20)}...`);
+    }
+  }
+
   for (const rawGw of GATEWAYS_GRAPHQL) {
     const gw = rawGw.trim();
     try {
       let allTxs: TxMeta[] = [];
-      let after: string | null = null;
+      let after: string | null = startCursor;
+      let pageCount = 0;
       let hasNext = true;
+      let lastCursor: string | undefined;
 
-      while (hasNext) {
+      while (hasNext && (pageLimit === null || pageCount < pageLimit)) {
         const variables = {
           ct,
           min: minHeight,
@@ -145,18 +260,49 @@ export async function fetchTxsRange(
           },
           body: JSON.stringify({ query, variables }),
         };
+        
         const data = await fetchWithRetry(gw, payload);
         const edges = data.transactions.edges;
+        
         for (const edge of edges) {
           const tx: TxMeta = edge.node;
-          if (!allTxs.find((t) => t.id === tx.id)) allTxs.push(tx);
+          if (!allTxs.find((t) => t.id === tx.id)) {
+            allTxs.push(tx);
+          }
         }
+        
         hasNext = data.transactions.pageInfo.hasNextPage;
-        after = data.transactions.cursor;
+        // Get cursor from the last edge
+        const lastEdge = edges[edges.length - 1];
+        after = lastEdge ? lastEdge.cursor : null;
+        lastCursor = after || undefined;
+        pageCount++;
+        
+        logger.debug(`Fetched page ${pageCount}/${pageLimit || '∞'}, got ${edges.length} transactions, hasNext: ${hasNext}`);
       }
 
-      // shuffle allTxs...
-      return allTxs;
+      // Store cursor for future continuation if there are more pages
+      if (hasNext && lastCursor) {
+        cursorStorage.set(cursorKey, {
+          cursor: lastCursor,
+          media,
+          minHeight,
+          maxHeight,
+          owner,
+          appName,
+          timestamp: Date.now()
+        });
+        logger.debug(`Stored cursor for future pagination: ${lastCursor.substring(0, 20)}...`);
+      } else {
+        // No more pages, remove stored cursor
+        cursorStorage.delete(cursorKey);
+      }
+
+      return {
+        txs: allTxs,
+        hasMore: hasNext,
+        cursor: lastCursor
+      };
     } catch (err) {
       logger.warn(`Gateway ${gw} failed after retries:`, err);
     }

@@ -5,6 +5,7 @@
  * Supports left and right swipe detection with configurable thresholds
  */
 import { useRef, useEffect } from 'preact/hooks';
+import { DEFAULT_SWIPE_THRESHOLD, DEFAULT_SWIPE_TIME_LIMIT } from '../constants';
 
 interface SwipeHandlers {
   onSwipeLeft?: () => void;
@@ -21,7 +22,7 @@ export function useSwipeGesture(
   { onSwipeLeft, onSwipeRight }: SwipeHandlers,
   options: SwipeOptions = {}
 ) {
-  const { threshold = 50, allowedTime = 500 } = options;
+  const { threshold = DEFAULT_SWIPE_THRESHOLD, allowedTime = DEFAULT_SWIPE_TIME_LIMIT } = options;
   
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);

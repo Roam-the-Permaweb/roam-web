@@ -28,12 +28,15 @@ import { useState, useEffect, useRef } from 'preact/hooks';
 import '../styles/media-view.css';
 import { GATEWAY_DATA_SOURCE } from '../engine/fetchQueue';
 import type { TxMeta } from '../constants';
+import { 
+  IMAGE_LOAD_THRESHOLD, 
+  VIDEO_LOAD_THRESHOLD, 
+  AUDIO_LOAD_THRESHOLD, 
+  TEXT_LOAD_THRESHOLD,
+  IFRAME_LOAD_TIMEOUT,
+  FADE_IN_DELAY
+} from '../constants';
 import { Icons, getMediaTypeIcon } from './Icons';
-
-const IMAGE_LOAD_THRESHOLD = 25 * 1024 * 1024;
-const VIDEO_LOAD_THRESHOLD = 200 * 1024 * 1024;
-const AUDIO_LOAD_THRESHOLD = 50 * 1024 * 1024;
-const TEXT_LOAD_THRESHOLD = 10 * 1024 * 1024;
 
 export interface MediaViewProps {
   txMeta: TxMeta;
@@ -122,7 +125,7 @@ useEffect(() => {
   // Trigger fade in after a short delay for smooth transition
   const timer = setTimeout(() => {
     setFadeIn(true);
-  }, 100);
+  }, FADE_IN_DELAY);
   
   return () => clearTimeout(timer);
 }, [id, contentType, size]);
@@ -154,7 +157,7 @@ useEffect(() => {
       if (iframe && iframe.offsetHeight < 32) {
         onCorrupt?.(txMeta);
       }
-    }, 4000); // 4 seconds to show something
+    }, IFRAME_LOAD_TIMEOUT);
 
     return () => clearTimeout(timeout);
   }, [contentType, directUrl, txMeta]);
@@ -162,7 +165,7 @@ useEffect(() => {
   const renderMedia = () => {
     if (contentType.startsWith('image/') && manualLoad) {
       return (
-        <button className="media-load-btn" onClick={() => setManualLoad(false)}>
+        <button className="media-load-btn" onClick={() => setManualLoad(false)} aria-label={`Load image, ${(size / 1024 / 1024).toFixed(2)} MB`}>
           Tap to load image ({(size / 1024 / 1024).toFixed(2)} MB)
         </button>
       );
@@ -174,6 +177,14 @@ useEffect(() => {
           src={manualLoad ? undefined : directUrl}
           alt="Roam content"
           onClick={() => onZoom?.(directUrl)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onZoom?.(directUrl);
+            }
+          }}
+          role="button"
+          tabIndex={0}
           onError={() => onCorrupt?.(txMeta)}
         />
       );
@@ -181,7 +192,7 @@ useEffect(() => {
 
     if (contentType.startsWith('video/') && manualLoadVideo) {
       return (
-        <button className="media-load-btn" onClick={() => setManualLoadVideo(false)}>
+        <button className="media-load-btn" onClick={() => setManualLoadVideo(false)} aria-label={`Load video, ${(size / 1024 / 1024).toFixed(2)} MB`}>
           Tap to load video ({(size / 1024 / 1024).toFixed(2)} MB)
         </button>
       );
@@ -200,7 +211,7 @@ useEffect(() => {
 
     if (contentType.startsWith('audio/') && manualLoadAudio) {
       return (
-        <button className="media-load-btn" onClick={() => setManualLoadAudio(false)}>
+        <button className="media-load-btn" onClick={() => setManualLoadAudio(false)} aria-label={`Load audio, ${(size / 1024 / 1024).toFixed(2)} MB`}>
           Tap to load audio ({(size / 1024 / 1024).toFixed(2)} MB)
         </button>
       );
@@ -234,7 +245,7 @@ useEffect(() => {
     if (['text/plain', 'text/markdown'].includes(contentType)) {
       if (manualLoadText) {
         return (
-          <button className="media-load-btn" onClick={() => setManualLoadText(false)}>
+          <button className="media-load-btn" onClick={() => setManualLoadText(false)} aria-label={`Load text, ${(size / 1024 / 1024).toFixed(2)} MB`}>
             Tap to load text ({(size / 1024 / 1024).toFixed(2)} MB)
           </button>
         );
@@ -288,6 +299,7 @@ useEffect(() => {
           className="privacy-toggle-btn"
           onClick={onPrivacyToggle}
           title={privacyOn ? 'Hide Privacy Screen' : 'Show Privacy Screen'}
+          aria-label={privacyOn ? 'Hide privacy screen' : 'Show privacy screen'}
         >
           {privacyOn ? <Icons.Eye /> : <Icons.EyeOff />}
         </button>
@@ -303,6 +315,8 @@ useEffect(() => {
             className="action-toggle-btn" 
             onClick={() => setActionsExpanded(!actionsExpanded)}
             title={actionsExpanded ? "Hide actions" : "Show actions"}
+            aria-label={actionsExpanded ? "Hide action menu" : "Show action menu"}
+            aria-expanded={actionsExpanded}
           >
             {actionsExpanded ? <Icons.CloseMenu size={18} /> : <Icons.Menu size={18} />}
           </button>
@@ -310,7 +324,7 @@ useEffect(() => {
           {actionsExpanded && (
             <div className="actions-menu">
               {onDetails && (
-                <button className="action-float-btn" onClick={onDetails} title="Details">
+                <button className="action-float-btn" onClick={onDetails} title="Details" aria-label="View content details">
                   {(() => {
                     const MediaTypeIcon = getMediaTypeIcon(contentType);
                     return <MediaTypeIcon size={18} />;
@@ -318,17 +332,17 @@ useEffect(() => {
                 </button>
               )}
               {onOpenInNewTab && (
-                <button className="action-float-btn" onClick={onOpenInNewTab} title="Open">
+                <button className="action-float-btn" onClick={onOpenInNewTab} title="Open" aria-label="Open content in new tab">
                   <Icons.Open size={18} />
                 </button>
               )}
               {onShare && (
-                <button className="action-float-btn" onClick={onShare} title="Share">
+                <button className="action-float-btn" onClick={onShare} title="Share" aria-label="Share this content">
                   <Icons.Share size={18} />
                 </button>
               )}
               {onDownload && (
-                <button className="action-float-btn" onClick={onDownload} title="Download">
+                <button className="action-float-btn" onClick={onDownload} title="Download" aria-label="Download this content">
                   <Icons.Download size={18} />
                 </button>
               )}

@@ -85,3 +85,28 @@ export const MIN_OLD_BLOCK = 100_000;
 export const MAX_RETRY_ATTEMPTS = 8;
 /** Base window size (blocks) */
 export const WINDOW_SIZE = 10_000;
+
+// Media loading thresholds (in bytes)
+export const IMAGE_LOAD_THRESHOLD = 25 * 1024 * 1024; // 25MB
+export const VIDEO_LOAD_THRESHOLD = 200 * 1024 * 1024; // 200MB
+export const AUDIO_LOAD_THRESHOLD = 50 * 1024 * 1024; // 50MB
+export const TEXT_LOAD_THRESHOLD = 10 * 1024 * 1024; // 10MB
+
+// Touch/swipe gesture constants
+export const DEFAULT_SWIPE_THRESHOLD = 50; // px
+export const DEFAULT_SWIPE_TIME_LIMIT = 500; // ms
+export const APP_SWIPE_THRESHOLD = 75; // px - stricter for app navigation
+export const APP_SWIPE_TIME_LIMIT = 300; // ms
+
+// Date range defaults
+export const DEFAULT_DATE_RANGE_DAYS = 30;
+
+// UI timeout constants
+export const IFRAME_LOAD_TIMEOUT = 4000; // ms
+export const FADE_IN_DELAY = 100; // ms
+
+// App-specific owner addresses for content curation
+export const APP_OWNERS: Record<string, string> = {
+  'Paragraph': 'w5AtiFsNvORfcRtikbdrp2tzqixb05vdPw-ZhgVkD70',
+  'Manifold': 'NVkSolD-1AJcJ0BMfEASJjIuak3Y6CvDJZ4XOIUbU9g'
+};

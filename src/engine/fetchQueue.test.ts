@@ -7,6 +7,8 @@ import type { Channel } from '../constants'
 vi.mock('./query', () => ({
   getCurrentBlockHeight: vi.fn().mockResolvedValue(1500000),
   fetchTxsRange: vi.fn(),
+  INITIAL_PAGE_LIMIT: 2,
+  REFILL_PAGE_LIMIT: 1,
 }))
 
 import { fetchTxsRange } from './query'
@@ -26,8 +28,8 @@ describe('FetchQueue Engine', () => {
     }
 
     it('should initialize queue with transactions', async () => {
-      const mockTxs = [mockTxMeta]
-      ;(fetchTxsRange as any).mockResolvedValue(mockTxs)
+      const mockResult = { txs: [mockTxMeta], hasMore: false }
+      ;(fetchTxsRange as any).mockResolvedValue(mockResult)
 
       const result = await initFetchQueue(mockChannel)
 
@@ -43,7 +45,7 @@ describe('FetchQueue Engine', () => {
         maxBlock: 1005000 // smaller range that fits in WINDOW_SIZE
       }
 
-      ;(fetchTxsRange as any).mockResolvedValue([mockTxMeta])
+      ;(fetchTxsRange as any).mockResolvedValue({ txs: [mockTxMeta], hasMore: false })
 
       const result = await initFetchQueue(mockChannel, options)
 
@@ -57,7 +59,7 @@ describe('FetchQueue Engine', () => {
         ownerAddress: 'test-owner-address'
       }
 
-      ;(fetchTxsRange as any).mockResolvedValue([mockTxMeta])
+      ;(fetchTxsRange as any).mockResolvedValue({ txs: [mockTxMeta], hasMore: false })
 
       await initFetchQueue(channelWithOwner)
 
@@ -66,7 +68,9 @@ describe('FetchQueue Engine', () => {
         1,
         1500000,
         'test-owner-address',
-        undefined
+        undefined,
+        2, // INITIAL_PAGE_LIMIT
+        false // isRefill
       )
     })
 
@@ -75,7 +79,7 @@ describe('FetchQueue Engine', () => {
         appName: 'TestApp'
       }
 
-      ;(fetchTxsRange as any).mockResolvedValue([mockTxMeta])
+      ;(fetchTxsRange as any).mockResolvedValue({ txs: [mockTxMeta], hasMore: false })
 
       await initFetchQueue(mockChannel, options)
 
@@ -85,7 +89,9 @@ describe('FetchQueue Engine', () => {
         expect.any(Number),
         expect.any(Number),
         undefined,
-        'TestApp'
+        'TestApp',
+        2, // INITIAL_PAGE_LIMIT
+        false // isRefill
       )
     })
   })

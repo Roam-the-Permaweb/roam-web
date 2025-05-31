@@ -27,14 +27,42 @@ export function useNavigation(callbacks: NavigationCallbacks) {
     setTempRange
   } = callbacks
   
-  const handleReset = async () => {
+  const handleReset = async (channel: Channel) => {
+    clearError()
+    setLoading(true)
     try {
+      // Clear navigation history
       await resetHistory()
-      setCurrentTx(null)
       logger.debug('History reset')
+      
+      // Clear seen IDs for fresh exploration (like roam does)
+      clearSeenIds()
+      logger.debug('Seen IDs cleared')
+      
+      // Initialize a fresh queue with random content
+      const range = await initFetchQueue(channel)
+      if (range) {
+        blockRangeRef.current = range
+        setTempRange(range)
+        setRangeSlider(range)
+        logger.debug('Fresh queue initialized')
+      }
+      
+      // Auto-load first content after reset for better UX
+      const tx = await getNextTx(channel)
+      if (tx) {
+        await addHistory(tx)
+        setCurrentTx(tx)
+        logger.debug('Auto-loaded content after reset')
+      } else {
+        setCurrentTx(null)
+        logger.debug('No content available after reset')
+      }
     } catch (e) {
       logger.error('Reset failed', e)
-      setError('Failed to reset history.')
+      setError('Failed to reset. Try again.')
+    } finally {
+      setLoading(false)
     }
   }
   
@@ -202,7 +230,7 @@ export function useNavigation(callbacks: NavigationCallbacks) {
         alert("Copied!")
       }
     } catch (error) {
-      console.error('Share failed:', error)
+      logger.error('Share failed:', error)
     }
   }
   
@@ -228,7 +256,7 @@ export function useNavigation(callbacks: NavigationCallbacks) {
       a.remove()
       URL.revokeObjectURL(url)
     } catch (err) {
-      console.error("Download failed:", err)
+      logger.error("Download failed:", err)
       alert("Failed to download the file.")
     }
   }

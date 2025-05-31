@@ -7,11 +7,19 @@ export function ConsentModal({ onAccept, onReject }: ConsentModalProps) {
   return (
     <div className="consent-backdrop">
       <div className="consent-modal">
-        <h2>⚠️ Content Warning</h2>
-        <p>This app will show anything posted to Arweave - some of it may be sensitive or NSFW. Click at your own risk! You must be 18+ to continue.</p>
+        <div className="consent-icon">⚠️</div>
+        <h2>Content Warning</h2>
+        <p>
+          This app will show anything posted to Arweave - some content may be 
+          sensitive or NSFW. You must be 18+ to continue.
+        </p>
         <div className="consent-actions">
-          <button className="consent-btn accept" onClick={onAccept}>I accept</button>
-          <button className="consent-btn reject" onClick={onReject}>Close app</button>
+          <button className="consent-btn primary" onClick={onAccept}>
+            I Accept & Continue
+          </button>
+          <button className="consent-btn secondary" onClick={onReject}>
+            Close App
+          </button>
         </div>
       </div>
     </div>

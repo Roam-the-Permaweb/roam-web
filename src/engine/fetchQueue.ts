@@ -21,9 +21,10 @@
  * - Efficient GraphQL queries with proper pagination
  * - Gateway failover for reliable content delivery
  */
-import { fetchTxsRange, getCurrentBlockHeight } from "./query";
+import { fetchTxsRange, getCurrentBlockHeight, INITIAL_PAGE_LIMIT, REFILL_PAGE_LIMIT } from "./query";
 import { logger } from "../utils/logger";
 import { learnFromBlockRange } from "../utils/dateBlockUtils";
+import { get as idbGet, set as idbSet } from "idb-keyval";
 import {
   type TxMeta,
   type Channel,
@@ -94,8 +95,57 @@ let queue: TxMeta[] = [];
 /** Prevent concurrent background refills */
 let isRefilling = false;
 
-/** Track seen IDs to avoid repeats in a session */
+/** Simple mutex for queue operations to prevent race conditions */
+class Mutex {
+  private locked = false;
+  private waitQueue: (() => void)[] = [];
+
+  async acquire(): Promise<void> {
+    while (this.locked) {
+      await new Promise<void>(resolve => this.waitQueue.push(resolve));
+    }
+    this.locked = true;
+  }
+
+  release(): void {
+    this.locked = false;
+    const resolve = this.waitQueue.shift();
+    if (resolve) resolve();
+  }
+}
+
+const queueMutex = new Mutex();
+
+/** Track seen IDs to avoid repeats across sessions */
 const seenIds = new Set<string>();
+const SEEN_IDS_KEY = 'roam_seen_ids_v1';
+const MAX_SEEN_IDS = 10000; // Limit storage size
+
+/** Load seen IDs from IndexedDB */
+async function loadSeenIds(): Promise<void> {
+  try {
+    const stored = await idbGet(SEEN_IDS_KEY);
+    if (stored && Array.isArray(stored)) {
+      stored.forEach(id => seenIds.add(id));
+      logger.debug(`Loaded ${stored.length} seen IDs from storage`);
+    }
+  } catch (err) {
+    logger.warn('Failed to load seen IDs from storage', err);
+  }
+}
+
+/** Save seen IDs to IndexedDB (limited to prevent infinite growth) */
+async function saveSeenIds(): Promise<void> {
+  try {
+    const idsArray = Array.from(seenIds);
+    // Keep only the most recent IDs if we exceed the limit
+    const toSave = idsArray.slice(-MAX_SEEN_IDS);
+    await idbSet(SEEN_IDS_KEY, toSave);
+    logger.debug(`Saved ${toSave.length} seen IDs to storage`);
+  } catch (err) {
+    logger.warn('Failed to save seen IDs to storage', err);
+  }
+}
 
 /** Sliding-window "max" per Channel key (media+recency) */
 const newMaxMap: Record<string, number> = {};
@@ -124,6 +174,7 @@ async function slideNewWindow(
 
 /**
  * Pick a random WINDOW_SIZE-block window for "old" channel
+ * Enhanced with better randomization to reduce duplicate chances
  */
 async function pickOldWindow(): Promise<{ min: number; max: number }> {
   const current = await getCurrentBlockHeight(GATEWAY_DATA_SOURCE[0]);
@@ -133,14 +184,20 @@ async function pickOldWindow(): Promise<{ min: number; max: number }> {
   }
   const startFloor = MIN_OLD_BLOCK;
   const startCeil = rawCutoff;
-  const min =
-    Math.floor(Math.random() * (startCeil - startFloor + 1)) + startFloor;
+  
+  // Use crypto.getRandomValues for better randomness
+  const randomArray = new Uint32Array(1);
+  crypto.getRandomValues(randomArray);
+  const randomValue = randomArray[0] / (0xffffffff + 1); // Convert to 0-1 range
+  
+  const min = Math.floor(randomValue * (startCeil - startFloor + 1)) + startFloor;
   const max = min + WINDOW_SIZE - 1;
   return { min, max };
 }
 
 /**
- * Fetch all transactions in a given block window (handles pagination internally)
+ * Fetch transactions in a given block window with progressive pagination
+ * @param isRefill - Whether this is a background refill (uses smaller page limit)
  */
 async function fetchWindow(
   media: Channel["media"],
@@ -148,70 +205,92 @@ async function fetchWindow(
   max: number,
   owner?: string,
   appName?: string,
+  isRefill: boolean = false
 ): Promise<TxMeta[]> {
-  return fetchTxsRange(media, min, max, owner, appName);
+  const pageLimit = isRefill ? REFILL_PAGE_LIMIT : INITIAL_PAGE_LIMIT;
+  const result = await fetchTxsRange(media, min, max, owner, appName, pageLimit, isRefill);
+  
+  if (result.hasMore && !isRefill) {
+    logger.debug(`Fetched ${result.txs.length} transactions, more available for future refills`);
+  }
+  
+  return result.txs;
 }
 
 /**
  * Get next transaction or trigger background refill
  */
 export async function getNextTx(channel: Channel): Promise<TxMeta | null> {
-  // synchronous refill if empty
-  if (queue.length === 0) {
-    logger.debug("Queue empty — blocking refill");
-    await initFetchQueue(channel);
-  }
-
-  // background refill if below threshold
-  if (queue.length < REFILL_THRESHOLD && !isRefilling) {
-    isRefilling = true;
-    logger.debug("Queue low — background refill");
-    initFetchQueue(channel)
-      .catch((e) => logger.warn("Background refill failed", e))
-      .finally(() => {
-        isRefilling = false;
-      });
-  }
-
-  const tx = queue.shift();
-  if (tx && channel.media === 'arfs') {
-    const entityType = getTagValue(tx.tags, "Entity-Type");
-    if (entityType !== "file") {
-      logger.debug("Skipping non-ArFS file transaction");
-      return getNextTx(channel); // recursively try next
+  // Use mutex to prevent race conditions
+  await queueMutex.acquire();
+  
+  try {
+    // synchronous refill if empty
+    if (queue.length === 0) {
+      logger.debug("Queue empty — blocking refill");
+      queueMutex.release(); // Release before async operation
+      await initFetchQueue(channel);
+      await queueMutex.acquire(); // Re-acquire after
     }
 
-    try {
-      const response = await fetch(`${GATEWAY_DATA_SOURCE[0]}/${tx.id}`);
-      const metadata = await response.json();
-
-      const {
-        dataTxId,
-        name,
-        size,
-        dataContentType,
-        ...rest
-      } = metadata;
-
-      tx.arfsMeta = {
-        dataTxId,
-        name,
-        size,
-        contentType: dataContentType,
-        customTags: rest,
-      };
-
-    } catch (err) {
-      logger.warn(`Failed to load ArFS metadata for ${tx.id}`, err);
-      return getNextTx(channel); // try next tx
+    // background refill if below threshold
+    if (queue.length < REFILL_THRESHOLD && !isRefilling) {
+      isRefilling = true;
+      logger.debug("Queue low — background refill");
+      // Don't await - let it run in background
+      initFetchQueue(channel, {}, true) // true = isRefill
+        .catch((e) => logger.warn("Background refill failed", e))
+        .finally(() => {
+          isRefilling = false;
+        });
     }
-  }
 
-  if (!tx) {
-    logger.warn("No transactions available after refill");
-    return null;
+    const tx = queue.shift();
+    
+    // Process ArFS transactions
+    if (tx && channel.media === 'arfs') {
+      const entityType = getTagValue(tx.tags, "Entity-Type");
+      if (entityType !== "file") {
+        logger.debug("Skipping non-ArFS file transaction");
+        queueMutex.release();
+        return getNextTx(channel); // recursively try next
+      }
+
+      try {
+        queueMutex.release(); // Release before async operation
+        const response = await fetch(`${GATEWAY_DATA_SOURCE[0]}/${tx.id}`);
+        const metadata = await response.json();
+
+        const {
+          dataTxId,
+          name,
+          size,
+          dataContentType,
+          ...rest
+        } = metadata;
+
+        tx.arfsMeta = {
+          dataTxId,
+          name,
+          size,
+          contentType: dataContentType,
+          customTags: rest,
+        };
+
+      } catch (err) {
+        logger.warn(`Failed to load ArFS metadata for ${tx.id}`, err);
+        return getNextTx(channel); // try next tx
+      }
+    }
+
+    if (!tx) {
+      logger.warn("No transactions available after refill");
+      return null;
+    }
+    return tx;
+  } finally {
+    queueMutex.release();
   }
-  return tx;
 }
 
 /**
@@ -230,10 +309,15 @@ export async function initFetchQueue(
     maxBlock?: number;
     ownerAddress?: string;
     appName?: string;
-  } = {}
+  } = {},
+  isRefill: boolean = false
 ): Promise<{ min: number; max: number }> {
-  queue = [];
   logger.info("Initializing fetch queue", { channel, options });
+  
+  // Load seen IDs on first init (not on refills)
+  if (!isRefill && seenIds.size === 0) {
+    await loadSeenIds();
+  }
 
   let txs: TxMeta[] = [];
   let min = 0;
@@ -263,7 +347,7 @@ export async function initFetchQueue(
         max = start + WINDOW_SIZE - 1;
       }
       logger.debug(`Attempt ${i + 1}/${MAX_RETRY_ATTEMPTS} → ${min}-${max}`);
-      txs = await fetchWindow(channel.media, min, max, owner, appNameToUse);
+      txs = await fetchWindow(channel.media, min, max, owner, appNameToUse, isRefill);
     }
 
     // —— 1b) Deep-link by txId only ——
@@ -283,7 +367,7 @@ export async function initFetchQueue(
         max = w.max;
       }
       logger.debug(`Attempt ${i + 1}/${MAX_RETRY_ATTEMPTS} → ${min}-${max}`);
-      txs = await fetchWindow(channel.media, min, max, owner, appNameToUse);
+      txs = await fetchWindow(channel.media, min, max, owner, appNameToUse, isRefill);
     }
 
     // —— 2) Deep-link by explicit range only ——
@@ -305,7 +389,7 @@ export async function initFetchQueue(
         max = start + (WINDOW_SIZE * i) - 1; // increase window size for each attempt
       }
       logger.info(`Attempt ${i + 1}/${MAX_RETRY_ATTEMPTS} → ${min}-${max}`);
-      txs = await fetchWindow(channel.media, min, max, owner, appNameToUse);
+      txs = await fetchWindow(channel.media, min, max, owner, appNameToUse, isRefill);
     }
 
     // —— 3) Deep-link by owner only (no TX, no range) ——
@@ -313,7 +397,7 @@ export async function initFetchQueue(
     min = 1;
     max = await getCurrentBlockHeight(GATEWAY_DATA_SOURCE[0]);
     logger.info(`Deep-link by owner only; full range ${min}-${max}`);
-    txs = await fetchWindow(channel.media, min, max, options.ownerAddress, options.appName);
+    txs = await fetchWindow(channel.media, min, max, options.ownerAddress, options.appName, isRefill);
 
     // —— 4) No deep-link params: normal bucket mode ——
   } else if (channel.ownerAddress && !options.ownerAddress) {
@@ -323,7 +407,7 @@ export async function initFetchQueue(
     logger.info(
       `Getting full history for owner ${channel.ownerAddress}: ${min}-${max}`
     );
-    txs = await fetchWindow(channel.media, min, max, channel.ownerAddress, channel.appName);
+    txs = await fetchWindow(channel.media, min, max, channel.ownerAddress, channel.appName, isRefill);
   } else {
     logger.info(
       `Bucket-mode (“${channel.recency}”) with up to ${MAX_RETRY_ATTEMPTS} attempts`
@@ -339,15 +423,36 @@ export async function initFetchQueue(
         max = w.max;
       }
       logger.debug(`Attempt ${i + 1}/${MAX_RETRY_ATTEMPTS} → ${min}-${max}`);
-      txs = await fetchWindow(channel.media, min, max, channel.ownerAddress, options.appName);
+      txs = await fetchWindow(channel.media, min, max, channel.ownerAddress, options.appName, isRefill);
     }
   }
 
   // —— 6) Dedupe & enqueue ——
   const newTxs = txs.filter((tx) => !seenIds.has(tx.id));
   newTxs.forEach((tx) => seenIds.add(tx.id));
-  queue = newTxs;
-  logger.info(`Queue loaded with ${queue.length} txs`);
+  
+  // Save seen IDs periodically
+  if (newTxs.length > 0 && !isRefill) {
+    saveSeenIds().catch(err => logger.warn('Failed to persist seen IDs', err));
+  }
+  
+  // Shuffle the transactions for better randomness
+  const shuffled = [...newTxs];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const randomArray = new Uint32Array(1);
+    crypto.getRandomValues(randomArray);
+    const j = Math.floor((randomArray[0] / (0xffffffff + 1)) * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  
+  // Update queue with mutex protection
+  await queueMutex.acquire();
+  try {
+    queue = shuffled;
+    logger.info(`Queue loaded with ${queue.length} txs (shuffled)`);
+  } finally {
+    queueMutex.release();
+  }
 
   // Learn from this block range for future estimation accuracy
   if (min > 0 && max > min) {

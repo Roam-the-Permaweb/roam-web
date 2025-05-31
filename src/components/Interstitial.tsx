@@ -20,14 +20,25 @@ export const Interstitial = ({ src, onClose }: InterstitialProps) => {
 
   return (
     <div className="interstitial-overlay">
-      <img src={src} alt="Sponsored content" className="interstitial-image" />
-      <button
-        className="interstitial-close-btn"
-        disabled={timer > 0}
-        onClick={onClose}
-      >
-        {timer > 0 ? `Please wait ${timer}s…` : 'Continue'}
-      </button>
+      <div className="interstitial-content">
+        <div className="interstitial-header">
+          <span className="sponsored-label">Sponsored Content</span>
+        </div>
+        
+        <div className="interstitial-media">
+          <img src={src} alt="Sponsored content" className="interstitial-image" />
+        </div>
+        
+        <div className="interstitial-footer">
+          <button
+            className="interstitial-close-btn"
+            disabled={timer > 0}
+            onClick={onClose}
+          >
+            {timer > 0 ? `Please wait ${timer}s…` : 'Continue Exploring'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
