@@ -19,7 +19,6 @@
   /* cap the banner height */
   max-height: 180px;
   max-width: 420px;
-  margin-bottom: -15px;
 }
 
 .app-header .banner img {
@@ -41,7 +40,8 @@
   align-items: center;
   gap: 0.75rem;
   padding: 1rem;
-  margin-bottom: 1rem;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
 }
 
 /* Navigation buttons - icon-only compact design */

@@ -12,7 +12,7 @@
  * - Apple-inspired UI with dark theme and smooth transitions
  * - PWA with offline support after installation
  */
-import { useEffect, useState } from 'preact/hooks'
+import { useEffect, useState, useRef } from 'preact/hooks'
 import { MediaView } from './components/MediaView'
 import { DetailsDrawer } from './components/DetailsDrawer'
 import { ZoomOverlay } from './components/ZoomOverlay'
@@ -30,6 +30,7 @@ import { useDeepLink } from './hooks/useDeepLink'
 import { useAppState } from './hooks/useAppState'
 import { useNavigation } from './hooks/useNavigation'
 import { useDateRangeSlider } from './hooks/useDateRangeSlider'
+import { useSwipeGesture } from './hooks/useSwipeGesture'
 import { logger } from './utils/logger'
 import { MAX_AD_CLICKS, MIN_AD_CLICKS } from './constants'
 import './styles/app.css'
@@ -185,6 +186,20 @@ export function App() {
   
   const handleRoam = () => navigation.handleRoam(appState.channel)
   
+  // Swipe gesture support
+  const mainRef = useRef<HTMLElement>(null)
+  useSwipeGesture(
+    mainRef,
+    {
+      onSwipeLeft: handleNext,
+      onSwipeRight: navigation.handleBack
+    },
+    {
+      threshold: 75, // Require 75px swipe distance
+      allowedTime: 300 // Complete swipe within 300ms
+    }
+  )
+  
   const handleApplyRange = () => dateRangeSlider.applyCustomDateRange(
     appState.channel,
     appState.ownerAddress,
@@ -207,30 +222,9 @@ export function App() {
 
       {appState.zoomSrc && <ZoomOverlay src={appState.zoomSrc} onClose={() => appState.setZoomSrc(null)} />}
 
-      <AppControls
-        onReset={navigation.handleReset}
-        onBack={navigation.handleBack}
-        onNext={handleNext}
-        onRoam={handleRoam}
-        onOpenChannels={async () => {
-          // Sync date slider with current block range when opening channels
-          // Opening channels drawer - syncing with current block range
-          if (currentBlockRange) {
-            // Syncing date slider with current block range
-            await dateRangeSlider.syncWithCurrentBlockRange(currentBlockRange.min, currentBlockRange.max)
-          } else {
-            // No current block range to sync
-          }
-          appState.openChannels()
-        }}
-        hasCurrentTx={!!appState.currentTx}
-        loading={appState.loading}
-        queueLoading={appState.queueLoading}
-      />
-
       {appState.error && <div className="error">{appState.error}</div>}
 
-      <main className="media-container">
+      <main ref={mainRef} className="media-container">
         {appState.loading && !appState.currentTx && <div className="loading">Loading…</div>}
         {!appState.currentTx && !appState.loading && <div className="placeholder">Feeling curious? Tap "Next" to explore — or "Roam" to spin the dice.</div>}
         {appState.currentTx && (
@@ -257,6 +251,27 @@ export function App() {
           </>
         )}
       </main>
+
+      <AppControls
+        onReset={navigation.handleReset}
+        onBack={navigation.handleBack}
+        onNext={handleNext}
+        onRoam={handleRoam}
+        onOpenChannels={async () => {
+          // Sync date slider with current block range when opening channels
+          // Opening channels drawer - syncing with current block range
+          if (currentBlockRange) {
+            // Syncing date slider with current block range
+            await dateRangeSlider.syncWithCurrentBlockRange(currentBlockRange.min, currentBlockRange.max)
+          } else {
+            // No current block range to sync
+          }
+          appState.openChannels()
+        }}
+        hasCurrentTx={!!appState.currentTx}
+        loading={appState.loading}
+        queueLoading={appState.queueLoading}
+      />
 
       {/* Details Drawer */}
       <DetailsDrawer

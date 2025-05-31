@@ -81,6 +81,7 @@ export const MediaView = ({
   
   // Determine content type for height styling
   const getContentTypeClass = () => {
+    if (contentType.startsWith('image/')) return 'content-image';
     if (contentType === 'application/pdf') return 'content-pdf';
     if (['text/plain', 'text/markdown'].includes(contentType)) return 'content-text';
     if (contentType.startsWith('text/html') || 
