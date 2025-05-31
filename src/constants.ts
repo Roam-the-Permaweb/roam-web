@@ -57,10 +57,10 @@ export interface TxMeta {
 // Content-Type mapping per media
 // --------------------------------------------------------------------------
 const BASE_CONTENT_TYPES: Record<Exclude<MediaType, "everything">, string[]> = {
-  images: ["image/png", "image/jpeg", "image/webp", "image/gif"],
-  videos: ["video/mp4", "video/webm"],
-  music: ["audio/mpeg", "audio/mp3", "audio/wav"],
-  websites: ["application/x.arweave-manifest+json", "text/html"],
+  images: ["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml", "image/avif"],
+  videos: ["video/mp4", "video/webm", "video/ogg"],
+  music: ["audio/mpeg", "audio/mp3", "audio/wav", "audio/ogg", "audio/webm", "audio/mp4", "audio/flac"],
+  websites: ["application/x.arweave-manifest+json", "text/html", "application/xhtml+xml"],
   text: ["text/markdown", "application/pdf"],
   arfs: ["application/json"] // this ensures only public arfs files
 };
