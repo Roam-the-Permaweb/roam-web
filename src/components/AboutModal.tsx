@@ -10,19 +10,35 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
     <div className="about-modal">
       <div className="modal-backdrop" onClick={onClose} />
       <div className="modal-content">
+        <button className="modal-close-btn" onClick={onClose}>
+          ✖️
+        </button>
+        
         <h2>Ready to Roam?</h2>
         <p>
           This playful app lets you randomly explore Arweave content:
           images, music, videos, websites, and even text documents.
-          <br></br>
-          <br></br>
+        </p>
+        <p>
           Just pick a channel, choose New or Old, and click Next to
           roam around the permaweb. Filter by creator, dive deep into
           history, or share those hidden gems!
         </p>
-        <button className="modal-close-btn" onClick={onClose}>
-          ✖️
-        </button>
+        
+        <div className="modal-footer">
+          <div className="footer-links">
+            <a 
+              href="https://github.com/roam-the-permaweb/roam-web" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="footer-link"
+            >
+              GitHub
+            </a>
+            <span className="footer-separator">•</span>
+            <span className="version-info">v0.1.2</span>
+          </div>
+        </div>
       </div>
     </div>
   )

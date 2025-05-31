@@ -1,5 +1,5 @@
 import { logger } from "../utils/logger";
-import { CONTENT_TYPES, type MediaType, type TxMeta } from "../constants";
+import { CONTENT_TYPES, APP_OWNERS, type MediaType, type TxMeta } from "../constants";
 
 // --------------------------------------------------------------------------
 // Configuration & Constants
@@ -72,12 +72,9 @@ export async function fetchTxsRange(
 ): Promise<TxMeta[]> {
   const ct = CONTENT_TYPES[media];
 
-  // These apps all use a specific wallet for their users.
-  // TODO - set this to allow for multiple owners
-  if (appName === 'Paragraph') {
-    owner = "w5AtiFsNvORfcRtikbdrp2tzqixb05vdPw-ZhgVkD70"
-  } else if (appName === 'Manifold') {
-    owner = "NVkSolD-1AJcJ0BMfEASJjIuak3Y6CvDJZ4XOIUbU9g"
+  // Set app-specific owner addresses for content curation
+  if (appName && APP_OWNERS[appName]) {
+    owner = APP_OWNERS[appName];
   }
   const ownersArg = owner ? `owners: ["${owner}"],` : "";
   const appNameArg = appName ? `{ name: "App-Name", values: "${appName}" }` : ""

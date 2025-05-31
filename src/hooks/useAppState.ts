@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'preact/hooks'
+import { useState, useEffect, useMemo } from 'preact/hooks'
 import type { Channel, TxMeta } from '../constants'
 
 export function useAppState() {
@@ -38,14 +38,16 @@ export function useAppState() {
     document.body.classList.toggle('drawer-open', detailsOpen || showChannels)
   }, [detailsOpen, showChannels])
   
-  // Format timestamp for display
-  const formattedTime = currentTx
-    ? new Date(currentTx.block.timestamp * 1000).toLocaleString(undefined, {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      })
-    : ''
+  // Format timestamp for display (memoized to prevent re-computation)
+  const formattedTime = useMemo(() => {
+    return currentTx
+      ? new Date(currentTx.block.timestamp * 1000).toLocaleString(undefined, {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+        })
+      : '';
+  }, [currentTx?.block.timestamp])
   
   return {
     // State

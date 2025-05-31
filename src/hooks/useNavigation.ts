@@ -202,7 +202,7 @@ export function useNavigation(callbacks: NavigationCallbacks) {
         alert("Copied!")
       }
     } catch (error) {
-      console.error('Share failed:', error)
+      logger.error('Share failed:', error)
     }
   }
   
@@ -228,7 +228,7 @@ export function useNavigation(callbacks: NavigationCallbacks) {
       a.remove()
       URL.revokeObjectURL(url)
     } catch (err) {
-      console.error("Download failed:", err)
+      logger.error("Download failed:", err)
       alert("Failed to download the file.")
     }
   }

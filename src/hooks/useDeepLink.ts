@@ -2,6 +2,7 @@ import { useState, useEffect } from 'preact/hooks'
 import { fetchTxMetaById, getCurrentBlockHeight } from '../engine/query'
 import { GATEWAY_DATA_SOURCE } from '../engine/fetchQueue'
 import { MEDIA_TYPES, type Channel, type MediaType, type TxMeta } from '../constants'
+import { logger } from '../utils/logger'
 
 export type DeepLinkOpts = {
   initialTx?: TxMeta
@@ -123,7 +124,7 @@ export function useDeepLink() {
           window.history.replaceState({}, '', window.location.pathname + window.location.hash)
         }
       } catch (error) {
-        console.error('Error parsing URL parameters:', error)
+        logger.error('Error parsing URL parameters:', error)
         if (isMounted) {
           setDeepLinkParsed(true) // Still mark as parsed to allow app to continue
         }

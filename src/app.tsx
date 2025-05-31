@@ -22,8 +22,8 @@ import { AppHeader } from './components/AppHeader'
 import { AppControls } from './components/AppControls'
 import { TransactionInfo } from './components/TransactionInfo'
 import { AboutModal } from './components/AboutModal'
-import { AppFooter } from './components/AppFooter'
 import { ChannelsDrawer } from './components/ChannelsDrawer'
+import { Icons } from './components/Icons'
 import { useInterstitialInjector } from './hooks/useInterstitialInjector'
 import { useConsent } from './hooks/useConsent'
 import { useDeepLink } from './hooks/useDeepLink'
@@ -32,7 +32,7 @@ import { useNavigation } from './hooks/useNavigation'
 import { useDateRangeSlider } from './hooks/useDateRangeSlider'
 import { useSwipeGesture } from './hooks/useSwipeGesture'
 import { logger } from './utils/logger'
-import { MAX_AD_CLICKS, MIN_AD_CLICKS } from './constants'
+import { MAX_AD_CLICKS, MIN_AD_CLICKS, DEFAULT_DATE_RANGE_DAYS, APP_SWIPE_THRESHOLD, APP_SWIPE_TIME_LIMIT } from './constants'
 import './styles/app.css'
 import './styles/channels-drawer.css'
 
@@ -65,7 +65,7 @@ export function App() {
   }
   
   // Default date range: last 30 days (independent of current content)
-  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+  const thirtyDaysAgo = new Date(Date.now() - DEFAULT_DATE_RANGE_DAYS * 24 * 60 * 60 * 1000)
   const today = new Date()
   
   const dateRangeSlider = useDateRangeSlider(thirtyDaysAgo, today, dateRangeSliderCallbacks)
@@ -146,7 +146,7 @@ export function App() {
         }
       } catch (error) {
         if (!cancelled) {
-          console.error('App initialization failed:', error)
+          logger.error('App initialization failed:', error)
         }
       }
     }
@@ -195,8 +195,8 @@ export function App() {
       onSwipeRight: navigation.handleBack
     },
     {
-      threshold: 75, // Require 75px swipe distance
-      allowedTime: 300 // Complete swipe within 300ms
+      threshold: APP_SWIPE_THRESHOLD,
+      allowedTime: APP_SWIPE_TIME_LIMIT
     }
   )
   
@@ -301,7 +301,15 @@ export function App() {
         onBlockRangeEstimated={dateRangeSlider.handleBlockRangeEstimated}
       />
 
-      <AppFooter onOpenAbout={() => appState.setShowAbout(true)} />
+      {/* Floating About button */}
+      <button 
+        className="about-btn"
+        onClick={() => appState.setShowAbout(true)}
+        title="About"
+        aria-label="About Roam"
+      >
+        <Icons.Info size={16} />
+      </button>
       
       <AboutModal 
         open={appState.showAbout} 

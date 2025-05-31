@@ -1,33 +1,114 @@
-/* src/styles/ad-overlay.css */
-  .interstitial-overlay {
-    position: fixed;
-    inset: 0;
-    width: 100vw;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0,0,0,0.8);
-    z-index: 9999;
-    pointer-events: auto;
+/* Interstitial Ad - Glass Morphism Design */
+.interstitial-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(12px);
+  z-index: 9999;
+  pointer-events: auto;
+}
+
+.interstitial-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 90%;
+  max-height: 90%;
+  background: rgba(15, 1, 33, 0.9);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+}
+
+.interstitial-header {
+  margin-bottom: 1.5rem;
+}
+
+.sponsored-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.375rem 0.75rem;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.interstitial-media {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+}
+
+.interstitial-image {
+  max-width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.interstitial-footer {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.interstitial-close-btn {
+  padding: 0.875rem 2rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: linear-gradient(135deg, #FF6A00, #FF00CC);
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  box-shadow: 0 6px 16px rgba(255, 106, 0, 0.3);
+  backdrop-filter: blur(10px);
+  min-width: 160px;
+}
+
+.interstitial-close-btn:hover:not(:disabled) {
+  transform: scale(1.02);
+  box-shadow: 0 8px 20px rgba(255, 106, 0, 0.4);
+}
+
+.interstitial-close-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+  box-shadow: none;
+}
+
+@media (max-width: 480px) {
+  .interstitial-content {
+    padding: 1.5rem;
+    max-width: 95%;
   }
+  
   .interstitial-image {
-    max-width: 80%;
-    max-height: 60%;
-    object-fit: contain;
-    margin-bottom: 1rem;
-    border-radius: 10%;
-    box-shadow: 0 0 10px rgba(255,255,255,0.2);
+    max-height: 50vh;
   }
+  
   .interstitial-close-btn {
-    padding: 0.5rem 1rem;
-    font-size: 1rem;
-    background: linear-gradient(var(--gradient-primary));
-    color: white;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.875rem;
+    min-width: 140px;
   }
-  .interstitial-close-btn[disabled] {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
+}
   

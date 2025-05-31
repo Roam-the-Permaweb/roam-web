@@ -22,7 +22,8 @@ import {
   Archive,
   FolderOpen,
   Users,
-  Menu
+  Menu,
+  Info
 } from 'lucide-preact'
 
 interface IconProps {
@@ -79,7 +80,8 @@ export const Icons = {
   
   // Menu
   Menu: (props: IconProps) => <Menu size={18} {...props} />,
-  CloseMenu: (props: IconProps) => <X size={18} {...props} />
+  CloseMenu: (props: IconProps) => <X size={18} {...props} />,
+  Info: (props: IconProps) => <Info size={16} {...props} />
 }
 
 // Helper function to get media type icon
