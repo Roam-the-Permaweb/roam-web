@@ -293,7 +293,10 @@ useEffect(() => {
   // Remove skeleton loader - just show content directly
 
   return (
-    <div className={`media-view-container ${fadeIn ? 'content-fade-in' : ''}`}>
+    <div 
+      key={txMeta.id} 
+      className={`media-view-container ${fadeIn ? 'content-fade-in' : ''}`}
+    >
       <div className="media-toolbar">
         <button
           className="privacy-toggle-btn"

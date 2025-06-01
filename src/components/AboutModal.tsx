@@ -36,7 +36,7 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
               GitHub
             </a>
             <span className="footer-separator">•</span>
-            <span className="version-info">v0.1.2</span>
+            <span className="version-info">v0.1.3</span>
           </div>
         </div>
       </div>

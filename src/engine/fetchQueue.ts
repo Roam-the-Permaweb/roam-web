@@ -301,6 +301,28 @@ export function clearSeenIds(): void {
   logger.debug("Cleared seen IDs set");
 }
 
+/**
+ * Peek at next few transactions without consuming them for preloading
+ */
+export async function peekNextTransactions(channel: Channel, count: number = 3): Promise<TxMeta[]> {
+  await queueMutex.acquire();
+  
+  try {
+    // If queue is too small, refill first
+    if (queue.length < count) {
+      logger.debug(`Queue has ${queue.length} items, refilling for peek`);
+      queueMutex.release(); // Release before async operation
+      await initFetchQueue(channel);
+      await queueMutex.acquire(); // Re-acquire after
+    }
+    
+    // Return copy of next items without removing them
+    return queue.slice(0, count);
+  } finally {
+    queueMutex.release();
+  }
+}
+
 export async function initFetchQueue(
   channel: Channel,
   options: {

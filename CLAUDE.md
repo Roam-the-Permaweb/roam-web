@@ -22,7 +22,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Architecture Overview
 
 ### Core Application Structure
-**Roam v0.1.0** is a Preact-based PWA for discovering random Arweave content. The app uses a shuffle-play interface where users tap "Next" to explore transactions filtered by content type (images, videos, music, websites, text, ArFS files, or everything). This release introduces major UI/UX improvements with Apple-inspired design and advanced date-based filtering.
+**Roam v0.1.3** is a Preact-based PWA for discovering random Arweave content. The app uses a shuffle-play interface where users tap "Next" to explore transactions filtered by content type (images, videos, music, websites, text, ArFS files, or everything). Recent releases introduced major UI/UX improvements with Apple-inspired design, advanced date-based filtering, session statistics, keyboard shortcuts, and content preloading.
 
 ### Key Architectural Patterns
 
@@ -161,6 +161,48 @@ App supports "self" gateway mapping that derives data gateway from current hostn
 - Works offline after installation
 - Thumb-friendly single-tap exploration
 - **NEW**: Floating action menus optimized for mobile usage
+
+### v0.1.3 Feature Additions
+
+**Session Statistics System** (`/src/hooks/useSessionStats.ts`, `/src/components/SessionStats.tsx`):
+- Real-time session tracking with comprehensive metrics
+- **localStorage persistence** - stats survive page refreshes and browser restarts
+- Content viewed count, unique creators, content type distribution
+- Session duration, data transfer estimates, content diversity percentage
+- Oldest/newest content tracking with block heights and dates
+- Beautiful Apple-inspired statistics modal with responsive design
+- Keyboard shortcut `T` for quick access, floating action button
+- **Proper reset functionality** - completely clears stats and localStorage on reset
+
+**Keyboard Shortcuts System** (`/src/hooks/useKeyboardShortcuts.ts`):
+- Complete keyboard navigation for accessibility and power users
+- Navigation: `Space/Enter/→` (next), `Backspace/←` (previous)
+- Actions: `S` (share), `D` (download), `C` (channels), `P` (privacy), `T` (statistics)
+- General: `Escape` (close overlays), `?` (help)
+- Smart input detection to prevent conflicts with form fields
+- Comprehensive help display in console
+
+**Content Preloading System** (`/src/hooks/usePreloading.ts`):
+- Intelligent background preloading for smooth browsing experience
+- Preloads next 2 transactions using `peekNextTransactions` from fetch queue
+- Content-type aware: preloads images and text, skips heavy media for bandwidth
+- LRU cache management with automatic cleanup (max 50 items)
+- 1-second delay to avoid interfering with current content loading
+- Reduces perceived loading times significantly
+
+**Reset Confirmation Modal** (`/src/components/ResetConfirmModal.tsx`):
+- Safety confirmation before clearing session data and history
+- Apple-inspired modal design with clear visual communication
+- Shows exactly what gets reset: statistics, history, seen content
+- Prevents accidental data loss from reset button
+- Integrated with main reset flow and keyboard shortcuts (Escape)
+- Mobile-optimized responsive design
+
+**Media Transition Improvements**:
+- Fixed jarring content flashing during navigation
+- Key-based rendering system for smooth transitions
+- Enhanced CSS animations with proper opacity and transform transitions
+- Better visual continuity between different content types
 
 ### Testing Infrastructure
 
