@@ -23,12 +23,14 @@ import {
   FolderOpen,
   Users,
   Menu,
-  Info
+  Info,
+  Calendar
 } from 'lucide-preact'
 
 interface IconProps {
   size?: number
   className?: string
+  onClick?: () => void
 }
 
 export const Icons = {
@@ -81,7 +83,10 @@ export const Icons = {
   // Menu
   Menu: (props: IconProps) => <Menu size={18} {...props} />,
   CloseMenu: (props: IconProps) => <X size={18} {...props} />,
-  Info: (props: IconProps) => <Info size={16} {...props} />
+  Info: (props: IconProps) => <Info size={16} {...props} />,
+  
+  // Date picker
+  Calendar: (props: IconProps) => <Calendar size={20} {...props} />
 }
 
 // Helper function to get media type icon

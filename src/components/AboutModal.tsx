@@ -20,9 +20,9 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
           images, music, videos, websites, and even text documents.
         </p>
         <p>
-          Just pick a channel, choose New or Old, and click Next to
+          Just pick a channel and click Next to
           roam around the permaweb. Filter by creator, dive deep into
-          history, or share those hidden gems!
+          history and share those hidden gems!
         </p>
         
         <div className="modal-footer">

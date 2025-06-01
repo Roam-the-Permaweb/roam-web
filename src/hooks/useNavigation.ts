@@ -35,32 +35,20 @@ export function useNavigation(callbacks: NavigationCallbacks) {
       await resetHistory()
       logger.debug('History reset')
       
-      // Clear seen IDs for fresh exploration (like roam does)
+      // Clear seen IDs for fresh exploration
       clearSeenIds()
       logger.debug('Seen IDs cleared')
       
-      // Initialize a fresh queue with random content
-      const range = await initFetchQueue(channel)
-      if (range) {
-        blockRangeRef.current = range
-        setTempRange(range)
-        setRangeSlider(range)
-        logger.debug('Fresh queue initialized')
-      }
+      // Clear current transaction first
+      setCurrentTx(null)
       
-      // Auto-load first content after reset for better UX
-      const tx = await getNextTx(channel)
-      if (tx) {
-        await addHistory(tx)
-        setCurrentTx(tx)
-        logger.debug('Auto-loaded content after reset')
-      } else {
-        setCurrentTx(null)
-        logger.debug('No content available after reset')
-      }
+      // Initialize fresh queue and immediately load first item
+      await initializeQueue(channel)
+      logger.debug('Reset complete with fresh content loaded')
     } catch (e) {
       logger.error('Reset failed', e)
       setError('Failed to reset. Try again.')
+      setCurrentTx(null) // Ensure we exit loading state even on error
     } finally {
       setLoading(false)
     }
@@ -107,7 +95,7 @@ export function useNavigation(callbacks: NavigationCallbacks) {
       } else {
         const tx = await getNextTx(channel)
         if (!tx) {
-          // No more content available
+          setError('No more content available. Try changing filters or reset.')
         } else {
           await addHistory(tx)
           setCurrentTx(tx)
@@ -141,7 +129,9 @@ export function useNavigation(callbacks: NavigationCallbacks) {
       // Get and show the first transaction
       const tx = await getNextTx(channel)
       if (!tx) {
-        setError("Couldn't start roam: no items found.")
+        setError("Couldn't start roam: no content found. Try different filters.")
+        // Set a null transaction to exit loading state gracefully
+        setCurrentTx(null)
       } else {
         await addHistory(tx)
         setCurrentTx(tx)
@@ -178,7 +168,8 @@ export function useNavigation(callbacks: NavigationCallbacks) {
       }
       
       if (!firstTx) {
-        setError("No content found to initialize.")
+        setError("No content found to initialize. Try different filters.")
+        setCurrentTx(null) // Ensure we exit loading state
       } else {
         setCurrentTx(firstTx)
         await addHistory(firstTx)
@@ -187,7 +178,8 @@ export function useNavigation(callbacks: NavigationCallbacks) {
       return range
     } catch (e) {
       logger.error('Init failed', e)
-      setError('Couldn\'t load content')
+      setError('Couldn\'t load content. Try different filters or reset.')
+      setCurrentTx(null) // Ensure we exit loading state on error
       throw e
     } finally {
       setQueueLoading(false)

@@ -78,7 +78,9 @@ export function ChannelsDrawer({
       
       {/* Drawer */}
       <div className={`channels-drawer ${open ? 'open' : ''}`}>
-        <button className="drawer-close" onClick={onClose}><Icons.Close /></button>
+        <button className="drawer-close" onClick={onClose} type="button">
+          <Icons.Close />
+        </button>
         
         {/* Content Type Section */}
         <div className="section">

@@ -1,7 +1,10 @@
 import { useState } from 'preact/hooks'
 
 export function useConsent() {
-  const [accepted, setAccepted] = useState(() => localStorage.getItem('consent') === 'true')
+  const [accepted, setAccepted] = useState(() => {
+    const consent = localStorage.getItem('consent')
+    return consent === 'true' || consent === 'true-seen'
+  })
   const [rejected, setRejected] = useState(false)
   
   const handleAccept = () => {

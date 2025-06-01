@@ -9,7 +9,7 @@
   height: 100vh;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(6px);
-  z-index: 50;
+  z-index: 490;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.3s ease;
@@ -25,12 +25,12 @@
   top: 0;
   right: 0;
   width: 100%;
-  max-width: 420px;
+  max-width: 480px;
   height: 100vh;
   background: rgba(15, 1, 33, 0.95);
   backdrop-filter: blur(20px);
   color: #ffffff;
-  z-index: 60;
+  z-index: 500;
   padding: 1rem 1.25rem 1.25rem;
   overflow-y: auto;
   transform: translateX(100%);
