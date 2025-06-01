@@ -17,7 +17,9 @@ import { MediaView } from './components/MediaView'
 import { DetailsDrawer } from './components/DetailsDrawer'
 import { ZoomOverlay } from './components/ZoomOverlay'
 import { Interstitial } from './components/Interstitial'
-import { ConsentModal } from './components/ConsentModal'
+import { WelcomeScreen } from './components/WelcomeScreen'
+import { LoadingScreen } from './components/LoadingScreen'
+import { NoContentScreen } from './components/NoContentScreen'
 import { AppHeader } from './components/AppHeader'
 import { AppControls } from './components/AppControls'
 import { TransactionInfo } from './components/TransactionInfo'
@@ -35,6 +37,9 @@ import { logger } from './utils/logger'
 import { MAX_AD_CLICKS, MIN_AD_CLICKS, DEFAULT_DATE_RANGE_DAYS, APP_SWIPE_THRESHOLD, APP_SWIPE_TIME_LIMIT } from './constants'
 import './styles/app.css'
 import './styles/channels-drawer.css'
+import './styles/welcome-screen.css'
+import './styles/loading-screen.css'
+import './styles/no-content.css'
 
 export function App() {
   /**
@@ -106,7 +111,7 @@ export function App() {
     navigation.handleNext(appState.channel, recordClick, false, appState.setShowInterstitial)
   }
   
-  // Initialize queue when filters change and deep link is parsed
+  // Initialize queue on first load with deep link
   useEffect(() => {
     if (!deepLink.deepLinkParsed) return
     
@@ -114,18 +119,10 @@ export function App() {
     
     const initializeApp = async () => {
       try {
-        // Only use deepLinkOpts on first run, then clear them
-        const opts = deepLink.deepLinkOpts?.initialTx || 
+        // Only auto-initialize if we have deep link parameters (direct links)
+        const hasDeepLinkContent = deepLink.deepLinkOpts?.initialTx || 
                     deepLink.deepLinkOpts?.minBlock != null || 
                     deepLink.deepLinkOpts?.ownerAddress != null
-          ? {
-              initialTx: deepLink.deepLinkOpts.initialTx,
-              minBlock: deepLink.deepLinkOpts.minBlock,
-              maxBlock: deepLink.deepLinkOpts.maxBlock,
-              ownerAddress: deepLink.deepLinkOpts.ownerAddress,
-              appName: deepLink.deepLinkOpts.appName
-            }
-          : {}
         
         // Update app state with deep link values
         if (deepLink.deepLinkOpts?.ownerAddress && !cancelled) {
@@ -138,8 +135,24 @@ export function App() {
           appState.setMedia(deepLink.deepLinkOpts.channel.media)
         }
         
-        await navigation.initializeQueue(appState.channel, opts)
-        // No need to sync date slider - it's independent
+        // Only auto-load content for direct links, not for fresh visits
+        if (hasDeepLinkContent) {
+          logger.debug('Initializing app with deep link', { channel: appState.channel })
+          
+          const opts = {
+            initialTx: deepLink.deepLinkOpts?.initialTx,
+            minBlock: deepLink.deepLinkOpts?.minBlock,
+            maxBlock: deepLink.deepLinkOpts?.maxBlock,
+            ownerAddress: deepLink.deepLinkOpts?.ownerAddress,
+            appName: deepLink.deepLinkOpts?.appName
+          }
+          
+          await navigation.initializeQueue(appState.channel, opts)
+          // Mark as initially loaded so filter changes work properly
+          setHasInitiallyLoaded(true)
+        } else {
+          logger.debug('Fresh visit - waiting for user to start exploring')
+        }
         
         if (deepLink.deepLinkOpts && !cancelled) {
           deepLink.clearDeepLink()
@@ -153,7 +166,37 @@ export function App() {
     
     initializeApp()
     return () => { cancelled = true }
-  }, [appState.media, appState.recency, appState.ownerAddress, appState.appName, deepLink.deepLinkParsed])
+  }, [deepLink.deepLinkParsed])
+
+  // Handle filter changes (reload content when user changes filters)
+  useEffect(() => {
+    if (!deepLink.deepLinkParsed || !consent.accepted) return
+    if (!hasInitiallyLoaded) return // Don't reload before initial load
+    // Remove the currentTx check - allow filter changes even if content is being loaded
+    
+    let cancelled = false
+    
+    const handleFilterChange = async () => {
+      try {
+        logger.debug('Filter changed - reinitializing content', { 
+          media: appState.media, 
+          recency: appState.recency,
+          ownerAddress: appState.ownerAddress,
+          appName: appState.appName 
+        })
+        
+        // Initialize new queue with current filters
+        await navigation.initializeQueue(appState.channel)
+      } catch (error) {
+        if (!cancelled) {
+          logger.error('Filter change initialization failed:', error)
+        }
+      }
+    }
+    
+    handleFilterChange()
+    return () => { cancelled = true }
+  }, [appState.media, appState.recency, appState.ownerAddress, appState.appName])
   
   // Date slider is independent - no automatic syncing needed
   
@@ -185,6 +228,23 @@ export function App() {
   }
   
   const handleRoam = () => navigation.handleRoam(appState.channel)
+
+  // Auto-start exploring - only on initial consent acceptance
+  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false)
+  
+  useEffect(() => {
+    if (consent.accepted && !hasInitiallyLoaded && !appState.currentTx && !appState.loading && deepLink.deepLinkParsed) {
+      // Only auto-start if there's no deep link content and we haven't loaded initially
+      const hasDeepLinkContent = deepLink.deepLinkOpts?.initialTx || 
+                  deepLink.deepLinkOpts?.minBlock != null || 
+                  deepLink.deepLinkOpts?.ownerAddress != null
+      
+      if (!hasDeepLinkContent) {
+        setHasInitiallyLoaded(true)
+        handleNext()
+      }
+    }
+  }, [consent.accepted, hasInitiallyLoaded, appState.currentTx, appState.loading, deepLink.deepLinkParsed])
   
   // Swipe gesture support
   const mainRef = useRef<HTMLElement>(null)
@@ -210,7 +270,7 @@ export function App() {
   return (
     <div className="app">
       {!consent.accepted && (
-        <ConsentModal onAccept={consent.handleAccept} onReject={consent.handleReject} />
+        <WelcomeScreen onAccept={consent.handleAccept} onReject={consent.handleReject} />
       )}
       
       {/* Interstitial overlay */}
@@ -222,27 +282,18 @@ export function App() {
 
       {appState.zoomSrc && <ZoomOverlay src={appState.zoomSrc} onClose={() => appState.setZoomSrc(null)} />}
 
-      {appState.error && <div className="error">{appState.error}</div>}
+      {appState.error && appState.error.includes('No content found') ? (
+        <NoContentScreen 
+          message="We couldn't find any content matching your current filters"
+          onRetry={handleNext}
+          onOpenFilters={appState.openChannels}
+        />
+      ) : appState.error ? (
+        <div className="error">{appState.error}</div>
+      ) : null}
 
       <main ref={mainRef} className="media-container">
-        {appState.loading && !appState.currentTx && <div className="loading">Loading…</div>}
-        {!appState.currentTx && !appState.loading && (
-          <div className="placeholder">
-            <div className="placeholder-content">
-              <div className="placeholder-icon">🎲</div>
-              <h3>Ready to Explore the Permaweb?</h3>
-              <p>Discover random content from Arweave's permanent storage</p>
-              <div className="placeholder-actions">
-                <button onClick={handleNext} className="placeholder-btn primary">
-                  🎯 Start Exploring
-                </button>
-                <button onClick={handleRoam} className="placeholder-btn secondary">
-                  🎲 Random Deep Dive
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {(appState.loading || appState.queueLoading) && !appState.currentTx && <LoadingScreen />}
         {appState.currentTx && (
           <>
             <MediaView

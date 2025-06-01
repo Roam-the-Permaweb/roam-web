@@ -9,14 +9,14 @@ export const GATEWAYS_GRAPHQL =
 const PAGE_SIZE = 100;
 export const DEFAULT_HEIGHT = 1666042;
 
-// Progressive pagination constants
-export const INITIAL_PAGE_LIMIT = 2; // Fetch 2 pages initially (200 transactions)
+// Progressive pagination constants - optimized for faster initial loads
+export const INITIAL_PAGE_LIMIT = 1; // Fetch 1 page initially (100 transactions) for faster startup
 export const REFILL_PAGE_LIMIT = 1;  // Fetch 1 page for refills (100 transactions)
 
-// Rate limiting to prevent GraphQL overload
+// Rate limiting to prevent GraphQL overload - optimized for better UX
 class RateLimiter {
   private requestTimes: number[] = [];
-  private readonly maxRequests: number = 5; // 5 requests per minute per gateway
+  private readonly maxRequests: number = 15; // 15 requests per minute per gateway (more reasonable)
   private readonly windowMs: number = 60000;
 
   async waitIfNeeded(): Promise<void> {
@@ -25,7 +25,7 @@ class RateLimiter {
     
     if (this.requestTimes.length >= this.maxRequests) {
       const oldestRequest = this.requestTimes[0];
-      const waitTime = oldestRequest + this.windowMs - now + 1000; // Add 1s buffer
+      const waitTime = oldestRequest + this.windowMs - now + 500; // Add 0.5s buffer
       logger.debug(`Rate limit reached, waiting ${waitTime}ms`);
       await new Promise(resolve => setTimeout(resolve, waitTime));
     }
@@ -146,9 +146,9 @@ async function fetchWithRetry(
       }
       
       if (i < attempts - 1) {
-        // Exponential backoff with jitter
-        const baseDelay = Math.min(1000 * Math.pow(2, i), 10000); // Max 10s
-        const jitter = Math.random() * baseDelay * 0.3; // ±30% jitter
+        // Reduced exponential backoff with jitter for better UX
+        const baseDelay = Math.min(500 * Math.pow(1.5, i), 3000); // Max 3s, gentler progression
+        const jitter = Math.random() * baseDelay * 0.2; // ±20% jitter
         const totalDelay = Math.floor(baseDelay + jitter);
         
         logger.debug(`Retry ${i + 1}/${attempts} after ${totalDelay}ms delay`);

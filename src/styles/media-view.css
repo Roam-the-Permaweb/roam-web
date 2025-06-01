@@ -164,7 +164,7 @@
 
 /* Content-specific sizing - follow image max-height pattern */
 .media-wrapper.content-image {
-  min-height: 260px; /* Ensure action buttons are visible */
+  min-height: 280px; /* Ensure action buttons are visible */
 }
 
 .media-wrapper.content-text,
@@ -181,7 +181,7 @@
 
 @media (min-width: 768px) {
   .media-wrapper.content-image {
-    min-height: 220px;
+    min-height: 280px;
   }
   
   .media-wrapper.content-text,
@@ -198,7 +198,7 @@
 
 @media (max-width: 480px) {
   .media-wrapper.content-image {
-    min-height: 180px;
+    min-height: 220px;
   }
   
   .media-wrapper.content-text,
@@ -330,7 +330,7 @@
   height: 100%;
   min-height: 500px;
   border: none;
-  background-color: #fafafa;
+  background-color: #787488;
   border-radius: 12px;
   object-fit: contain;
 }

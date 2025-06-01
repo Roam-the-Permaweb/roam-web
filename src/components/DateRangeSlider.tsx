@@ -29,6 +29,7 @@
  */
 import { useRef, useEffect, useState } from 'preact/hooks'
 import { estimateBlockForTimestampSync, isValidArweaveDate } from '../utils/dateBlockUtils'
+import { Icons } from './Icons'
 
 type DateRange = { start: Date; end: Date }
 
@@ -327,35 +328,47 @@ export function DateRangeSlider({
       <div className="date-inputs">
         <div className="date-input-wrapper">
           <label className="date-input-label">From</label>
-          <input
-            type="date"
-            ref={startInput}
-            className="date-input"
-            value={formatDateForInput(tempRange.start)}
-            onChange={(e) => handleStartChange((e.target as HTMLInputElement).value)}
-            onBlur={handleStartBlur}
-            min="2018-06-01"
-            max={formatDateForInput(now)}
-            aria-label="Start date"
-            disabled={isLoading}
-            placeholder="YYYY-MM-DD"
-          />
+          <div className="date-input-with-icon">
+            <input
+              type="date"
+              ref={startInput}
+              className="date-input"
+              value={formatDateForInput(tempRange.start)}
+              onChange={(e) => handleStartChange((e.target as HTMLInputElement).value)}
+              onBlur={handleStartBlur}
+              min="2018-06-01"
+              max={formatDateForInput(now)}
+              aria-label="Start date"
+              disabled={isLoading}
+              placeholder="YYYY-MM-DD"
+            />
+            <Icons.Calendar 
+              className="date-input-icon" 
+              onClick={() => startInput.current?.showPicker()}
+            />
+          </div>
         </div>
         <div className="date-input-wrapper">
           <label className="date-input-label">To</label>
-          <input
-            type="date"
-            ref={endInput}
-            className="date-input"
-            value={formatDateForInput(tempRange.end)}
-            onChange={(e) => handleEndChange((e.target as HTMLInputElement).value)}
-            onBlur={handleEndBlur}
-            min={formatDateForInput(tempRange.start)}
-            max={formatDateForInput(now)}
-            aria-label="End date"
-            disabled={isLoading}
-            placeholder="YYYY-MM-DD"
-          />
+          <div className="date-input-with-icon">
+            <input
+              type="date"
+              ref={endInput}
+              className="date-input"
+              value={formatDateForInput(tempRange.end)}
+              onChange={(e) => handleEndChange((e.target as HTMLInputElement).value)}
+              onBlur={handleEndBlur}
+              min={formatDateForInput(tempRange.start)}
+              max={formatDateForInput(now)}
+              aria-label="End date"
+              disabled={isLoading}
+              placeholder="YYYY-MM-DD"
+            />
+            <Icons.Calendar 
+              className="date-input-icon" 
+              onClick={() => endInput.current?.showPicker()}
+            />
+          </div>
         </div>
       </div>
 
