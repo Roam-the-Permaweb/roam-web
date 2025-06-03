@@ -1,10 +1,10 @@
-# Roam v0.1.0
+# Roam v0.2.0
 
-> A beautifully crafted, shuffle-play interface for exploring the infinite Permaweb.
+> A beautifully crafted, shuffle-play interface for exploring the infinite Permaweb with **AR.IO Wayfinder integration**.
 
-**Roam** is a premium, mobile-first PWA that lets you discover random Arweave content—images, videos, music, websites, documents, and ArFS files—through an elegant, Apple-inspired interface. Just tap "Next" and let serendipity guide your digital journey.
+**Roam** is a premium, mobile-first PWA that lets you discover random Arweave content—images, videos, music, websites, documents, and ArFS files—through an elegant, Apple-inspired interface with **verified content delivery**. Just tap "Next" and let serendipity guide your digital journey through the **secure, verified Permaweb**.
 
-**Pure, decentralized content discovery.**
+**Pure, decentralized content discovery with cryptographic verification.**
 
 ![Roam Banner](./assets/banner.png)
 
@@ -16,7 +16,38 @@
 
 ---
 
-## ✨ v0.1.0 Features
+## ✨ v0.2.0 Features - AR.IO Wayfinder Integration
+
+### 🔐 **Content Verification & Security**
+- **AR.IO Wayfinder integration** for cryptographic content verification
+- **Hash-based verification** via trusted gateways (permagate.io, vilenarios.com)
+- **Real-time verification status** with visual indicators (green checkmark, loading spinner)
+- **Secure content delivery** through verified blob serving
+- **Dynamic gateway routing** with AR.IO network stake-based selection
+
+### 🚀 **Intelligent Content Caching**
+- **Smart content caching** with TTL and LRU-based cleanup
+- **Verification status sync** - cached content shows correct verification state
+- **Memory-efficient** Object URL lifecycle management
+- **Race condition-free** verification event propagation
+- **Bandwidth-conscious** size-aware loading with manual thresholds
+
+### 📊 **Size-Aware Loading System**
+- **Images**: Auto-load up to 25MB, manual button for larger files
+- **Videos**: Auto-load up to 200MB, manual button for larger files  
+- **Audio**: Auto-load up to 50MB, manual button for larger files
+- **Text**: Auto-load up to 10MB, manual button for larger files
+- **Forced loading**: Manual buttons trigger verified Wayfinder fetch
+
+### 🛡 **Enhanced Security Features**
+- **No double-fetching** - single verified fetch per content item
+- **Transparent verification** - subtle UI that doesn't disrupt browsing
+- **Fallback mechanisms** - graceful degradation to direct gateways
+- **Memory leak prevention** - proper cleanup and resource management
+
+---
+
+## ✨ v0.1.0 Features (Previous Release)
 
 ### 🎨 **Apple-Inspired Design**
 - **Glass morphism effects** with subtle backdrop blur
@@ -67,7 +98,14 @@
 
 ## 🧠 How It Works
 
-Roam v0.1.0 is built on a sophisticated, client-side architecture:
+Roam v0.2.0 is built on a sophisticated, client-side architecture with AR.IO Wayfinder integration:
+
+### **AR.IO Wayfinder Verification System**
+- **AR.IO SDK integration** with dynamic gateway routing via network stake
+- **Hash-based content verification** using trusted gateways for integrity validation
+- **Intelligent content caching** with verification status synchronization
+- **Size-aware loading** respects bandwidth with content-type specific thresholds
+- **Event-driven verification** with race condition-free status propagation
 
 ### **Content Discovery Engine**
 - **Sliding window algorithm** efficiently explores Arweave's massive blockchain
@@ -84,14 +122,17 @@ Roam v0.1.0 is built on a sophisticated, client-side architecture:
 ### **Modern Tech Stack**
 - **Preact** for lightweight, fast UI rendering
 - **TypeScript** for type-safe development
+- **AR.IO SDK** for verified content delivery and gateway routing
 - **Vite** for lightning-fast builds and hot reload
 - **UnoCSS** for utility-first styling
 - **Vitest** for comprehensive testing
 - **PWA** capabilities with offline support
 
 ### **Arweave Integration**
+- **AR.IO Wayfinder** for verified content delivery with cryptographic validation
 - **Public GraphQL APIs** - no private keys required
-- **AR.IO Gateways** for fast, reliable content delivery
+- **Dynamic gateway routing** via AR.IO network with stake-based selection
+- **Trusted gateway verification** using permagate.io and vilenarios.com
 - **Client-side only** - your data never touches our servers
 - **Permanent hosting** on the Arweave blockchain
 
@@ -140,7 +181,7 @@ npm run typecheck        # TypeScript checking
 
 ### **Environment Configuration**
 
-Create a `.env.local` file for custom gateway configuration:
+Create a `.env.local` file for custom gateway and Wayfinder configuration:
 
 ```bash
 # GraphQL endpoints (required)
@@ -148,12 +189,21 @@ VITE_GATEWAYS_GRAPHQL=https://goldsky-arweave-api.com/graphql,https://arweave-se
 
 # Data gateways (optional - defaults to arweave.net)
 VITE_GATEWAYS_DATA_SOURCE=https://arweave.net,https://ar-io.net,self
+
+# Wayfinder configuration (optional - experimental)
+VITE_ENABLE_WAYFINDER=true    # Enable AR.IO Wayfinder integration (disabled by default)
 ```
 
 **Gateway Notes**:
 - `self` automatically derives gateway from current hostname
 - Multiple gateways provide automatic failover
 - AR.IO gateways offer enhanced performance and reliability
+
+**Wayfinder Notes**:
+- Wayfinder disabled by default (experimental feature)
+- Set `VITE_ENABLE_WAYFINDER=true` to enable verified content delivery
+- Automatically falls back to direct gateways if unavailable
+- Uses AR.IO network dynamic routing with trusted gateway verification
 
 ---
 
@@ -217,16 +267,21 @@ npm run test:ui
 ```
 src/
 ├── components/          # UI components
-│   ├── MediaView.tsx    # Universal content renderer
+│   ├── MediaView.tsx    # Universal content renderer with Wayfinder integration
+│   ├── VerificationIndicator.tsx # Real-time verification status display
 │   ├── DateRangeSlider.tsx  # Date filtering
 │   ├── DetailsDrawer.tsx    # Metadata panel
 │   └── ...
+├── services/            # External service integrations (NEW)
+│   ├── wayfinder.ts     # AR.IO Wayfinder SDK integration
+│   └── wayfinderTypes.ts # TypeScript interfaces for Wayfinder
 ├── engine/              # Core data layer
 │   ├── fetchQueue.ts    # Content discovery algorithms
 │   ├── query.ts         # GraphQL operations  
 │   └── history.ts       # Navigation management
 ├── hooks/               # Custom React hooks
 │   ├── useAppState.ts   # Main app state
+│   ├── useWayfinderContent.ts # Verified content fetching hook (NEW)
 │   ├── useNavigation.ts # Navigation logic
 │   └── ...
 ├── utils/               # Utility functions
@@ -237,6 +292,9 @@ src/
 
 ### **Key Design Patterns**
 
+- **AR.IO Wayfinder integration** for verified content delivery with caching
+- **Event-driven verification** with race condition-free status propagation
+- **Size-aware loading** with bandwidth-conscious thresholds
 - **Custom hooks** for modular state management
 - **Sliding window algorithm** for efficient content discovery
 - **Binary search** for precise date-to-block mapping
@@ -293,7 +351,14 @@ This project is licensed under the MIT License - see the [LICENSE](./LICENSE) fi
 
 ## 🗺 Roadmap
 
-**Upcoming Features**:
+**✅ v0.2.0 Completed**:
+- [x] **AR.IO Wayfinder integration** with verified content delivery
+- [x] **Content verification system** with hash-based validation
+- [x] **Intelligent caching** with TTL and LRU cleanup
+- [x] **Size-aware loading** with bandwidth-conscious thresholds
+- [x] **Real-time verification UI** with status indicators
+
+**Upcoming Features (v0.3.0+)**:
 - [ ] Content bookmarking and favorites
 - [ ] Advanced search and filtering options
 - [ ] Social features and content sharing
@@ -302,7 +367,7 @@ This project is licensed under the MIT License - see the [LICENSE](./LICENSE) fi
 - [ ] Content creator tools integration
 
 **Performance Improvements**:
-- [ ] Enhanced caching strategies
+- [x] **Enhanced caching strategies** (Wayfinder integration)
 - [ ] WebAssembly date/block algorithms
 - [ ] Service worker optimization
 - [ ] Progressive image loading

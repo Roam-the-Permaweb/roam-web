@@ -23,6 +23,7 @@ import { NoContentScreen } from './components/NoContentScreen'
 import { AppHeader } from './components/AppHeader'
 import { AppControls } from './components/AppControls'
 import { TransactionInfo } from './components/TransactionInfo'
+import { useWayfinderContent } from './hooks/useWayfinderContent'
 import { AboutModal } from './components/AboutModal'
 import { ChannelsDrawer } from './components/ChannelsDrawer'
 import { SessionStats } from './components/SessionStats'
@@ -93,6 +94,9 @@ export function App() {
   
   // Session statistics tracking (now we use the hook directly)
   const sessionStats = useSessionStats(appState.currentTx)
+  
+  // Wayfinder content verification status
+  const wayfinderResult = useWayfinderContent(appState.currentTx?.id || null)
 
   // Navigation callbacks 
   const navigationCallbacks = {
@@ -348,8 +352,10 @@ export function App() {
       ) : null}
 
       <main ref={mainRef} className="media-container">
-        {(appState.loading || appState.queueLoading) && !appState.currentTx && <LoadingScreen />}
-        {appState.currentTx && (
+        {/* Only show full loading screen when no content exists */}
+        {(appState.loading || appState.queueLoading) && !appState.currentTx ? (
+          <LoadingScreen />
+        ) : appState.currentTx ? (
           <>
             <MediaView
               txMeta={appState.currentTx}
@@ -358,6 +364,7 @@ export function App() {
               onZoom={(src) => appState.setZoomSrc(src)}
               onCorrupt={handleNext}
               loading={appState.loading}
+              wayfinderLoading={wayfinderResult.loading && wayfinderResult.isWayfinderEnabled}
               onShare={handleShare}
               onDownload={handleDownload}
               onDetails={() => appState.setDetailsOpen(true)}
@@ -367,11 +374,12 @@ export function App() {
             {!appState.loading && (
               <TransactionInfo 
                 txMeta={appState.currentTx} 
-                formattedTime={appState.formattedTime} 
+                formattedTime={appState.formattedTime}
+                verificationStatus={wayfinderResult.verificationStatus}
               />
             )}
           </>
-        )}
+        ) : null}
       </main>
 
       <AppControls

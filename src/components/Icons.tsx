@@ -27,7 +27,9 @@ import {
   Calendar,
   BarChart,
   Heart,
-  Layers
+  Layers,
+  CheckCircle,
+  AlertTriangle
 } from 'lucide-preact'
 
 interface IconProps {
@@ -97,7 +99,11 @@ export const Icons = {
   Layers: (props: IconProps) => <Layers size={20} {...props} />,
   
   // Alias X for close
-  X: (props: IconProps) => <X size={20} {...props} />
+  X: (props: IconProps) => <X size={20} {...props} />,
+  
+  // Verification icons
+  CheckCircle: (props: IconProps) => <CheckCircle size={12} {...props} />,
+  AlertTriangle: (props: IconProps) => <AlertTriangle size={12} {...props} />
 }
 
 // Helper function to get media type icon

@@ -1,5 +1,6 @@
 import { DateRangeSlider } from './DateRangeSlider'
 import { Icons } from './Icons'
+import { useWayfinderSettings } from '../hooks/useWayfinderSettings'
 import type { MediaType, TxMeta } from '../constants'
 
 interface DateRange {
@@ -56,6 +57,9 @@ export function ChannelsDrawer({
   onApplyRange,
   onBlockRangeEstimated
 }: ChannelsDrawerProps) {
+  // Wayfinder settings management
+  const { settings: wayfinderSettings, updateSettings: updateWayfinderSettings } = useWayfinderSettings()
+
   const handleMediaChange = (media: MediaType) => {
     onMediaChange(media)
     onClose()
@@ -169,6 +173,40 @@ export function ChannelsDrawer({
           onResetRange={onResetRange}
           onApplyRange={onApplyRange}
         />
+
+                {/* AR.IO Settings Section */}
+        <div className="section">
+          <h2 className="section-title">AR.IO Network</h2>
+          <div className="settings-controls">
+            <div className="setting-row">
+              <div className="setting-info">
+                <span className="setting-label">Enhanced Content Delivery</span>
+                <span className="setting-description">Use AR.IO network for enhanced content routing and verification</span>
+              </div>
+              <button 
+                className={`toggle-btn ${wayfinderSettings.enableWayfinder ? 'active' : ''}`}
+                onClick={() => updateWayfinderSettings({ enableWayfinder: !wayfinderSettings.enableWayfinder })}
+                aria-label={`${wayfinderSettings.enableWayfinder ? 'Disable' : 'Enable'} AR.IO enhanced content delivery`}
+              >
+                <div className="toggle-indicator" />
+              </button>
+            </div>
+            
+            <div className="setting-row">
+              <div className="setting-info">
+                <span className="setting-label">GraphQL (Coming Soon)</span>
+                <span className="setting-description">Use AR.IO network for metadata queries</span>
+              </div>
+              <button 
+                className="toggle-btn disabled"
+                disabled
+                aria-label="GraphQL routing not yet available"
+              >
+                <div className="toggle-indicator" />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </>
   )

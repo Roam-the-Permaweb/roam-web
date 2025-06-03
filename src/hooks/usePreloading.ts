@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'preact/hooks'
 import { peekNextTransactions } from '../engine/fetchQueue'
 import { GATEWAY_DATA_SOURCE } from '../engine/fetchQueue'
+import { wayfinderService } from '../services/wayfinder'
 import { logger } from '../utils/logger'
 import type { TxMeta, Channel } from '../constants'
 
@@ -9,6 +10,10 @@ const preloadCache = new Map<string, boolean>()
 
 export function usePreloading(currentTx: TxMeta | null, channel: Channel) {
   const preloadTimeoutRef = useRef<number | null>(null)
+  
+  // Temporarily disable preloading for easier Wayfinder troubleshooting
+  logger.debug('Preloading disabled for Wayfinder troubleshooting')
+  return
 
   const preloadContent = async (tx: TxMeta) => {
     const dataTxId = tx.arfsMeta?.dataTxId || tx.id
@@ -23,6 +28,17 @@ export function usePreloading(currentTx: TxMeta | null, channel: Channel) {
     }
 
     try {
+      // Get URL via Wayfinder or fallback to original gateway
+      let contentUrl: string
+      try {
+        const wayfinderResult = await wayfinderService.getContentUrl({ txId: dataTxId })
+        contentUrl = wayfinderResult.url
+        logger.debug(`Using Wayfinder URL for preload: ${dataTxId}`)
+      } catch (error) {
+        // Fallback to original gateway
+        contentUrl = `${GATEWAY_DATA_SOURCE[0]}/${dataTxId}`
+        logger.debug(`Fallback to original gateway for preload: ${dataTxId}`)
+      }
       
       // Only preload lightweight content types
       if (contentType.startsWith('image/') && contentType !== 'image/gif') {
@@ -36,11 +52,11 @@ export function usePreloading(currentTx: TxMeta | null, channel: Channel) {
         img.onerror = () => {
           logger.debug(`Failed to preload image: ${dataTxId}`)
         }
-        img.src = `${GATEWAY_DATA_SOURCE[0]}/${dataTxId}`
+        img.src = contentUrl
       } 
       else if (contentType.startsWith('text/') || contentType === 'application/json') {
         // Preload text content
-        const response = await fetch(`${GATEWAY_DATA_SOURCE[0]}/${dataTxId}`, {
+        const response = await fetch(contentUrl, {
           method: 'HEAD', // Just check if it exists, don't download
         })
         if (response.ok) {

@@ -294,6 +294,7 @@
   white-space: pre-wrap;
   overflow-y: auto;
   height: 100%;
+  max-height: 65vh; /* Increased from 60vh - more viewing area */
   padding: 1.25rem 1.25rem 1.25rem 3.5rem;
   background: rgba(255, 255, 255, 0.98);
   border-radius: 12px;
@@ -445,7 +446,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 120px;
+  min-height: 220px;
   font-size: 0.875rem;
   font-weight: 500;
   color: rgba(255, 255, 255, 0.8);
@@ -523,7 +524,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 200px;
+  min-height: 220px;
   color: rgba(255, 255, 255, 0.8);
   gap: 0.5rem;
 }
@@ -737,4 +738,56 @@
 .media-actions-float:hover,
 .media-toolbar:hover {
   opacity: 1;
+}
+
+/* Subtle Wayfinder loading indicator */
+.wayfinder-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(1px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 90; /* Below floating actions but above content */
+  border-radius: inherit;
+}
+
+.wayfinder-loading-indicator {
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  color: white;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+  animation: fadeInUp 0.3s ease-out;
+}
+
+.wayfinder-loading-indicator svg {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

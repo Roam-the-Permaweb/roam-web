@@ -1,12 +1,15 @@
 import type { TxMeta } from '../constants'
+import type { VerificationStatus } from '../services/wayfinderTypes'
 import { Icons, getMediaTypeIcon } from './Icons'
+import { VerificationIndicator } from './VerificationIndicator'
 
 interface TransactionInfoProps {
   txMeta: TxMeta
   formattedTime: string
+  verificationStatus?: VerificationStatus
 }
 
-export function TransactionInfo({ txMeta, formattedTime }: TransactionInfoProps) {
+export function TransactionInfo({ txMeta, formattedTime, verificationStatus }: TransactionInfoProps) {
   const fileName = txMeta.arfsMeta?.name
   const contentType = txMeta.arfsMeta?.contentType || 
     txMeta.tags.find(t => t.name === 'Content-Type')?.value || 'Unknown'
@@ -55,6 +58,15 @@ export function TransactionInfo({ txMeta, formattedTime }: TransactionInfoProps)
           <Icons.Clock size={14} />
           <span>{formattedTime}</span>
         </a>
+        
+        {verificationStatus && (
+          <div className="metadata-verification">
+            <VerificationIndicator 
+              status={verificationStatus}
+              className="metadata-verification-indicator"
+            />
+          </div>
+        )}
       </div>
     </div>
   )

@@ -22,7 +22,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Architecture Overview
 
 ### Core Application Structure
-**Roam v0.1.3** is a Preact-based PWA for discovering random Arweave content. The app uses a shuffle-play interface where users tap "Next" to explore transactions filtered by content type (images, videos, music, websites, text, ArFS files, or everything). Recent releases introduced major UI/UX improvements with Apple-inspired design, advanced date-based filtering, session statistics, keyboard shortcuts, and content preloading.
+**Roam v0.2.0** is a Preact-based PWA for discovering random Arweave content with **AR.IO Wayfinder integration** for verified content delivery. The app uses a shuffle-play interface where users tap "Next" to explore transactions filtered by content type (images, videos, music, websites, text, ArFS files, or everything). Version 0.2.0 introduces **content verification**, **intelligent caching**, **size-aware loading**, and **bandwidth-conscious design** while maintaining the Apple-inspired UI/UX from previous releases.
 
 ### Key Architectural Patterns
 
@@ -46,22 +46,34 @@ URL parameters drive content initialization:
 - `minBlock`/`maxBlock` - Custom block range
 - `channel` - Media type filter
 
+**AR.IO Wayfinder Integration (v0.2.0 - Experimental)**:
+- `wayfinder.ts` - AR.IO SDK integration with dynamic gateway routing (disabled by default)
+- `useWayfinderContent.ts` - Content fetching hook with verification event handling
+- `VerificationIndicator.tsx` - Real-time verification status display
+- Content verification via trusted gateways (permagate.io, vilenarios.com)
+- Intelligent caching with TTL and LRU cleanup mechanisms
+- Size-aware loading to respect bandwidth thresholds
+- Race condition-free verification event propagation
+- Requires `VITE_ENABLE_WAYFINDER=true` to activate
+
 **State Management**:
 - Custom hook pattern for modular state management
 - Main app state via `useAppState` hook
 - Navigation logic in `useNavigation` hook
 - Deep linking via `useDeepLink` hook
 - Date filtering via `useDateRangeSlider` hook
+- **NEW**: Wayfinder content state via `useWayfinderContent` hook
 - Local history persisted via IndexedDB
 - URL parsing drives initial state
 
 ### Component Architecture
 
 **Core Components** (`/src/components/`):
-- `MediaView.tsx` - Universal content renderer with type-specific handling and floating actions
+- `MediaView.tsx` - Universal content renderer with **Wayfinder integration**, size-aware loading, and verified content display
 - `DetailsDrawer.tsx` - Apple-inspired transaction metadata panel  
-- `DateRangeSlider.tsx` - **NEW**: Advanced date-based filtering with block conversion
-- `TransactionInfo.tsx` - **NEW**: Compact metadata footer with owner/tx/date info
+- `DateRangeSlider.tsx` - Advanced date-based filtering with block conversion
+- `TransactionInfo.tsx` - Compact metadata footer with **verification indicator**
+- `VerificationIndicator.tsx` - **NEW**: Real-time content verification status display
 - `ZoomOverlay.tsx` - Full-screen media viewer
 - `Interstitial.tsx` - Advertisement overlay
 - `AppHeader.tsx` - Application header with branding
@@ -253,6 +265,57 @@ App supports "self" gateway mapping that derives data gateway from current hostn
 - **Progressive loading** for large files with bandwidth consideration
 - **Clear visual feedback** for loading states and user actions
 - **Accessible design patterns** following modern web standards
+
+### v0.2.0 Release Highlights - AR.IO Wayfinder Integration
+
+**Major Features Added**:
+- **AR.IO Wayfinder Integration** - Complete integration with AR.IO SDK for verified content delivery
+- **Content Verification System** - Hash-based verification via trusted gateways (permagate.io, vilenarios.com)
+- **Intelligent Content Caching** - TTL and LRU-based caching with verification status sync
+- **Size-Aware Loading** - Bandwidth-conscious loading with content-type specific thresholds
+- **Real-Time Verification UI** - Dynamic verification indicator showing content integrity status
+- **Dynamic Gateway Routing** - AR.IO network integration with stake-based gateway selection
+
+**Technical Architecture**:
+- **Wayfinder Service** (`/src/services/wayfinder.ts`) - Centralized AR.IO SDK integration
+- **Content Hook** (`/src/hooks/useWayfinderContent.ts`) - React hook for verified content fetching
+- **Verification Component** (`/src/components/VerificationIndicator.tsx`) - Real-time verification status
+- **Event-Driven Updates** - Race condition-free verification event propagation
+- **Fallback Mechanisms** - Graceful degradation to direct gateways when Wayfinder unavailable
+
+**Performance Optimizations**:
+- **Throttled Cache Cleanup** - Efficient cache management with 5-minute cleanup intervals
+- **Single Content Fetch** - No double-fetching or redundant verification calls
+- **Memory Management** - Proper Object URL lifecycle and cleanup prevention
+- **Content Type Optimization** - Single lookup with efficient fallback chains
+- **Pre-Registration Event Handling** - Eliminates verification race conditions
+
+**Security & Verification**:
+- **Dual Trusted Gateways** - Multiple verification sources for enhanced security
+- **Hash-Based Verification** - Content integrity validation via AR.IO network
+- **Secure Content Delivery** - Verified blobs served through managed Object URLs
+- **No Re-fetching** - Single verified fetch per content item ensures authenticity
+
+**User Experience**:
+- **Transparent Verification** - Subtle loading indicators that don't disrupt content flow
+- **Bandwidth Respect** - Large files show manual load buttons before Wayfinder calls
+- **Verification Feedback** - Clear visual indicators (green checkmark, loading spinner, error states)
+- **Cached Content Performance** - Instant loading for previously verified content
+- **Seamless Fallback** - Invisible fallback to direct gateways maintains user experience
+
+**Size-Aware Loading Thresholds**:
+- **Images**: Auto-load up to 25MB, manual load button for larger files
+- **Videos**: Auto-load up to 200MB, manual load button for larger files  
+- **Audio**: Auto-load up to 50MB, manual load button for larger files
+- **Text**: Auto-load up to 10MB, manual load button for larger files
+- **Forced Loading**: Manual load buttons trigger verified Wayfinder fetch
+
+**Development Guidelines for Wayfinder**:
+- **Event Listener Registration**: Always register before making Wayfinder requests
+- **Verification Status Sync**: Use current status from service, not cached responses
+- **Content Type Handling**: Support all media types with proper Blob processing
+- **Error Handling**: Implement graceful fallbacks for network and verification failures
+- **Memory Management**: Properly cleanup Object URLs and event listeners
 
 ### Development Guidelines
 
