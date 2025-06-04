@@ -33,15 +33,14 @@ import {
   WINDOW_SIZE,
 } from "../constants";
 
-// Read and trim configured gateways
+// Read and trim configured gateways (handle both singular and plural env var names)
 const rawGateways =
-  import.meta.env.VITE_GATEWAYS_DATA_SOURCE?.split(",")
+  (import.meta.env.VITE_GATEWAYS_DATA_SOURCE || import.meta.env.VITE_GATEWAY_DATA_SOURCE || "self")
+    .split(",")
     .map((s: string) => s.trim())
-    .filter(Boolean) ?? [];
+    .filter(Boolean);
 
-// Determine primary and fallback gateways
-const fallbackGateway =
-  rawGateways[1] || rawGateways[0] || "https://arweave.net";
+// Remove unused fallbackGateway variable
 
 // Build GATEWAY_DATA_SOURCE array with 'self' mapping logic
 export const GATEWAY_DATA_SOURCE: string[] = rawGateways
@@ -56,13 +55,14 @@ export const GATEWAY_DATA_SOURCE: string[] = rawGateways
     // split into [ "roam_vilenarios", "ardrive", "net" ]
     const parts = hostname.toLowerCase().split(".");
 
-    // if localhost or pure .ar.io, fall back
+    // if localhost or .ar.io domain, use arweave.net
     if (
       hostname === "localhost" ||
       hostname === "127.0.0.1" ||
-      hostname.endsWith(".ar.io")
+      hostname.endsWith(".ar.io") ||
+      hostname === "ar.io"
     ) {
-      return fallbackGateway;
+      return "https://arweave.net";
     }
 
     // drop exactly the first segment if there are >2 parts
@@ -247,6 +247,12 @@ export async function getNextTx(channel: Channel): Promise<TxMeta | null> {
 
     const tx = queue.shift();
     
+    // Mark transaction as seen when consumed
+    if (tx) {
+      seenIds.add(tx.id);
+      saveSeenIds().catch(err => logger.warn('Failed to persist seen IDs', err));
+    }
+    
     // Process ArFS transactions
     if (tx && channel.media === 'arfs') {
       const entityType = getTagValue(tx.tags, "Entity-Type");
@@ -301,6 +307,28 @@ export function clearSeenIds(): void {
   logger.debug("Cleared seen IDs set");
 }
 
+/**
+ * Peek at next few transactions without consuming them for preloading
+ */
+export async function peekNextTransactions(channel: Channel, count: number = 3): Promise<TxMeta[]> {
+  await queueMutex.acquire();
+  
+  try {
+    // If queue is too small, refill first
+    if (queue.length < count) {
+      logger.debug(`Queue has ${queue.length} items, refilling for peek`);
+      queueMutex.release(); // Release before async operation
+      await initFetchQueue(channel);
+      await queueMutex.acquire(); // Re-acquire after
+    }
+    
+    // Return copy of next items without removing them
+    return queue.slice(0, count);
+  } finally {
+    queueMutex.release();
+  }
+}
+
 export async function initFetchQueue(
   channel: Channel,
   options: {
@@ -329,7 +357,7 @@ export async function initFetchQueue(
     options.minBlock != null &&
     options.maxBlock != null
   ) {
-    seenIds.add(options.initialTx.id);
+    // Don't mark initialTx as seen - let user view it first
     const { minBlock: rangeMin, maxBlock: rangeMax, ownerAddress, appName } = options;
     const owner = ownerAddress ?? channel.ownerAddress;
     const appNameToUse = appName ?? channel.appName;
@@ -352,7 +380,7 @@ export async function initFetchQueue(
 
     // —— 1b) Deep-link by txId only ——
   } else if (options.initialTx) {
-    seenIds.add(options.initialTx.id);
+    // Don't mark initialTx as seen - let user view it first
     const owner = options.ownerAddress ?? options.initialTx.owner.address;
     const appNameToUse = options.appName;
     logger.info(`Deep-link by ID only; bucket-mode fallback`);
@@ -429,12 +457,7 @@ export async function initFetchQueue(
 
   // —— 6) Dedupe & enqueue ——
   const newTxs = txs.filter((tx) => !seenIds.has(tx.id));
-  newTxs.forEach((tx) => seenIds.add(tx.id));
-  
-  // Save seen IDs periodically
-  if (newTxs.length > 0 && !isRefill) {
-    saveSeenIds().catch(err => logger.warn('Failed to persist seen IDs', err));
-  }
+  // Don't mark as seen until actually viewed by user
   
   // Shuffle the transactions for better randomness
   const shuffled = [...newTxs];

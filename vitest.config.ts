@@ -12,6 +12,11 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     css: true,
+    include: ['src/**/*.test.ts'], // Only include our own tests
+    exclude: [
+      'examples/**', // Exclude examples directory from tests
+      'node_modules/**', // Explicitly exclude node_modules
+    ],
     coverage: {
       reporter: ['text', 'json', 'html'],
       exclude: [
@@ -20,6 +25,7 @@ export default defineConfig({
         '**/*.d.ts',
         'dist/',
         'coverage/',
+        'examples/',
       ],
     },
   },

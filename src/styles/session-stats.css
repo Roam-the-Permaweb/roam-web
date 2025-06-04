@@ -1,0 +1,251 @@
+/* Session Statistics Modal */
+.session-stats-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  opacity: 0;
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.session-stats-panel {
+  background: rgba(20, 20, 20, 0.95);
+  border: 1px solid rgba(255, 106, 0, 0.3);
+  border-radius: 12px;
+  max-width: 800px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  transform: translateY(20px);
+  animation: slideUp 0.3s ease-out forwards;
+}
+
+.session-stats-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 24px 16px;
+  border-bottom: 1px solid rgba(255, 106, 0, 0.2);
+}
+
+.session-stats-header h2 {
+  color: #ff6a00;
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.close-btn:hover {
+  background: rgba(255, 106, 0, 0.1);
+  color: #ff6a00;
+}
+
+.session-stats-content {
+  padding: 24px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.stat-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 106, 0, 0.2);
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 106, 0, 0.4);
+}
+
+.stat-card.wide {
+  grid-column: 1 / -1;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.stat-icon {
+  color: #ff6a00;
+  flex-shrink: 0;
+}
+
+.stat-info {
+  flex: 1;
+}
+
+.stat-value {
+  color: #fff;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.stat-label {
+  color: #aaa;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.stat-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ff6a00;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.content-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.content-type-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 106, 0, 0.1);
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 106, 0, 0.2);
+  min-width: 100px;
+}
+
+.content-type-name {
+  color: #fff;
+  font-size: 14px;
+  margin-right: 8px;
+}
+
+.content-type-count {
+  color: #ff6a00;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.time-range {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.time-range-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.time-label {
+  color: #aaa;
+  font-weight: 500;
+  min-width: 60px;
+}
+
+.time-value {
+  color: #fff;
+  font-weight: 500;
+}
+
+.time-value small {
+  color: #999;
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+.no-data {
+  color: #666;
+  font-style: italic;
+  text-align: center;
+  width: 100%;
+  padding: 20px;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .session-stats-overlay {
+    padding: 10px;
+  }
+  
+  .session-stats-panel {
+    max-height: 95vh;
+  }
+  
+  .session-stats-header {
+    padding: 16px 16px 12px;
+  }
+  
+  .session-stats-content {
+    padding: 16px;
+  }
+  
+  .stats-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .stat-card {
+    padding: 16px;
+    gap: 12px;
+  }
+  
+  .stat-value {
+    font-size: 20px;
+  }
+  
+  .content-types {
+    gap: 8px;
+  }
+  
+  .content-type-item {
+    min-width: 80px;
+    padding: 6px 10px;
+  }
+  
+  .time-range-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); }
+  to { transform: translateY(0); }
+}

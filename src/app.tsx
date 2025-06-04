@@ -25,6 +25,8 @@ import { AppControls } from './components/AppControls'
 import { TransactionInfo } from './components/TransactionInfo'
 import { AboutModal } from './components/AboutModal'
 import { ChannelsDrawer } from './components/ChannelsDrawer'
+import { SessionStats } from './components/SessionStats'
+import { ResetConfirmModal } from './components/ResetConfirmModal'
 import { Icons } from './components/Icons'
 import { useInterstitialInjector } from './hooks/useInterstitialInjector'
 import { useConsent } from './hooks/useConsent'
@@ -33,6 +35,10 @@ import { useAppState } from './hooks/useAppState'
 import { useNavigation } from './hooks/useNavigation'
 import { useDateRangeSlider } from './hooks/useDateRangeSlider'
 import { useSwipeGesture } from './hooks/useSwipeGesture'
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
+import { usePreloading } from './hooks/usePreloading'
+import { useSessionStats } from './hooks/useSessionStats'
+import { useVerificationStatus } from './hooks/useVerificationStatus'
 import { logger } from './utils/logger'
 import { MAX_AD_CLICKS, MIN_AD_CLICKS, DEFAULT_DATE_RANGE_DAYS, APP_SWIPE_THRESHOLD, APP_SWIPE_TIME_LIMIT } from './constants'
 import './styles/app.css'
@@ -40,6 +46,8 @@ import './styles/channels-drawer.css'
 import './styles/welcome-screen.css'
 import './styles/loading-screen.css'
 import './styles/no-content.css'
+import './styles/session-stats.css'
+import './styles/reset-confirm.css'
 
 export function App() {
   /**
@@ -77,6 +85,19 @@ export function App() {
   
   // Track current block range for date slider sync
   const [currentBlockRange, setCurrentBlockRange] = useState<{ min: number; max: number } | null>(null)
+  
+  // Session statistics modal
+  const [showSessionStats, setShowSessionStats] = useState(false)
+  
+  // Reset confirmation modal
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
+  
+  // Session statistics tracking (now we use the hook directly)
+  const sessionStats = useSessionStats(appState.currentTx)
+  
+  // Track verification status for current transaction
+  const verificationStatus = useVerificationStatus(appState.currentTx?.id || null)
+  
 
   // Navigation callbacks 
   const navigationCallbacks = {
@@ -259,6 +280,28 @@ export function App() {
       allowedTime: APP_SWIPE_TIME_LIMIT
     }
   )
+
+  // Keyboard shortcuts support
+  useKeyboardShortcuts({
+    onNext: handleNext,
+    onPrevious: navigation.handleBack,
+    onShare: handleShare,
+    onDownload: handleDownload,
+    onOpenChannels: appState.openChannels,
+    onCloseOverlays: () => {
+      if (appState.showChannels) appState.closeChannels()
+      if (appState.detailsOpen) appState.setDetailsOpen(false)
+      if (appState.showAbout) appState.setShowAbout(false)
+      if (showSessionStats) setShowSessionStats(false)
+      if (showResetConfirm) setShowResetConfirm(false)
+      if (appState.zoomSrc) appState.setZoomSrc(null)
+    },
+    onTogglePrivacy: appState.togglePrivacy,
+    onSessionStats: () => setShowSessionStats(true)
+  })
+
+  // Preload next content for smooth browsing
+  usePreloading(appState.currentTx, appState.channel)
   
   const handleApplyRange = () => dateRangeSlider.applyCustomDateRange(
     appState.channel,
@@ -266,6 +309,23 @@ export function App() {
     appState.appName,
     navigation.blockRangeRef
   )
+
+  // Reset confirmation handlers
+  const handleResetClick = async () => {
+    setShowResetConfirm(true)
+  }
+
+  const handleResetConfirm = async () => {
+    setShowResetConfirm(false)
+    // Reset session statistics
+    sessionStats.resetStats()
+    // Reset navigation and seen content
+    await navigation.handleReset(appState.channel)
+  }
+
+  const handleResetCancel = () => {
+    setShowResetConfirm(false)
+  }
   
   return (
     <div className="app">
@@ -293,8 +353,10 @@ export function App() {
       ) : null}
 
       <main ref={mainRef} className="media-container">
-        {(appState.loading || appState.queueLoading) && !appState.currentTx && <LoadingScreen />}
-        {appState.currentTx && (
+        {/* Only show full loading screen when no content exists */}
+        {(appState.loading || appState.queueLoading) && !appState.currentTx ? (
+          <LoadingScreen />
+        ) : appState.currentTx ? (
           <>
             <MediaView
               txMeta={appState.currentTx}
@@ -312,15 +374,16 @@ export function App() {
             {!appState.loading && (
               <TransactionInfo 
                 txMeta={appState.currentTx} 
-                formattedTime={appState.formattedTime} 
+                formattedTime={appState.formattedTime}
+                verificationStatus={verificationStatus}
               />
             )}
           </>
-        )}
+        ) : null}
       </main>
 
       <AppControls
-        onReset={() => navigation.handleReset(appState.channel)}
+        onReset={handleResetClick}
         onBack={navigation.handleBack}
         onNext={handleNext}
         onRoam={handleRoam}
@@ -368,19 +431,42 @@ export function App() {
         onBlockRangeEstimated={dateRangeSlider.handleBlockRangeEstimated}
       />
 
-      {/* Floating About button */}
-      <button 
-        className="about-btn"
-        onClick={() => appState.setShowAbout(true)}
-        title="About"
-        aria-label="About Roam"
-      >
-        <Icons.Info size={16} />
-      </button>
+      {/* Floating action buttons */}
+      <div className="floating-buttons">
+        <button 
+          className="stats-btn"
+          onClick={() => setShowSessionStats(true)}
+          title="Session Statistics"
+          aria-label="View session statistics"
+        >
+          <Icons.BarChart size={16} />
+        </button>
+        
+        <button 
+          className="about-btn"
+          onClick={() => appState.setShowAbout(true)}
+          title="About"
+          aria-label="About Roam"
+        >
+          <Icons.Info size={16} />
+        </button>
+      </div>
       
       <AboutModal 
         open={appState.showAbout} 
         onClose={() => appState.setShowAbout(false)} 
+      />
+      
+      <SessionStats
+        currentTx={appState.currentTx}
+        open={showSessionStats}
+        onClose={() => setShowSessionStats(false)}
+      />
+
+      <ResetConfirmModal
+        open={showResetConfirm}
+        onConfirm={handleResetConfirm}
+        onCancel={handleResetCancel}
       />
     </div>
   )
