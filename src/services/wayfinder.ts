@@ -7,7 +7,7 @@ import {
   TrustedGatewaysHashProvider,
   RandomRoutingStrategy,
   ARIO
-} from '@ar.io/sdk'
+} from '@ar.io/sdk/web'
 import { logger } from '../utils/logger'
 import { GATEWAY_DATA_SOURCE } from '../engine/fetchQueue'
 import type { 
@@ -543,7 +543,7 @@ class WayfinderService {
 
         // Use request() method like the example
         logger.debug(`🧭 Making Wayfinder request for: ${arUrl}`)
-        const response = await this.wayfinder.request(arUrl, {cache: "no-cache"})
+        const response = await this.wayfinder.request(arUrl)
         
         // Extract URL and content info from response
         const gatewayUrl = response.url
