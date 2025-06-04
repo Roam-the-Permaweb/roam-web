@@ -23,7 +23,6 @@ import { NoContentScreen } from './components/NoContentScreen'
 import { AppHeader } from './components/AppHeader'
 import { AppControls } from './components/AppControls'
 import { TransactionInfo } from './components/TransactionInfo'
-import { useWayfinderContent } from './hooks/useWayfinderContent'
 import { AboutModal } from './components/AboutModal'
 import { ChannelsDrawer } from './components/ChannelsDrawer'
 import { SessionStats } from './components/SessionStats'
@@ -39,6 +38,7 @@ import { useSwipeGesture } from './hooks/useSwipeGesture'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { usePreloading } from './hooks/usePreloading'
 import { useSessionStats } from './hooks/useSessionStats'
+import { useVerificationStatus } from './hooks/useVerificationStatus'
 import { logger } from './utils/logger'
 import { MAX_AD_CLICKS, MIN_AD_CLICKS, DEFAULT_DATE_RANGE_DAYS, APP_SWIPE_THRESHOLD, APP_SWIPE_TIME_LIMIT } from './constants'
 import './styles/app.css'
@@ -95,8 +95,9 @@ export function App() {
   // Session statistics tracking (now we use the hook directly)
   const sessionStats = useSessionStats(appState.currentTx)
   
-  // Wayfinder content verification status
-  const wayfinderResult = useWayfinderContent(appState.currentTx?.id || null)
+  // Track verification status for current transaction
+  const verificationStatus = useVerificationStatus(appState.currentTx?.id || null)
+  
 
   // Navigation callbacks 
   const navigationCallbacks = {
@@ -364,7 +365,6 @@ export function App() {
               onZoom={(src) => appState.setZoomSrc(src)}
               onCorrupt={handleNext}
               loading={appState.loading}
-              wayfinderLoading={wayfinderResult.loading && wayfinderResult.isWayfinderEnabled}
               onShare={handleShare}
               onDownload={handleDownload}
               onDetails={() => appState.setDetailsOpen(true)}
@@ -375,7 +375,7 @@ export function App() {
               <TransactionInfo 
                 txMeta={appState.currentTx} 
                 formattedTime={appState.formattedTime}
-                verificationStatus={wayfinderResult.verificationStatus}
+                verificationStatus={verificationStatus}
               />
             )}
           </>

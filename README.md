@@ -190,8 +190,21 @@ VITE_GATEWAYS_GRAPHQL=https://goldsky-arweave-api.com/graphql,https://arweave-se
 # Data gateways (optional - defaults to arweave.net)
 VITE_GATEWAYS_DATA_SOURCE=https://arweave.net,https://ar-io.net,self
 
-# Wayfinder configuration (optional - experimental)
-VITE_ENABLE_WAYFINDER=true    # Enable AR.IO Wayfinder integration (disabled by default)
+# Wayfinder configuration (optional - experimental, all disabled by default)
+VITE_ENABLE_WAYFINDER=true                    # Master switch - enables Wayfinder (legacy)
+VITE_WAYFINDER_ENABLE_ROUTING=true            # Enable smart gateway selection via AR.IO
+VITE_WAYFINDER_ENABLE_VERIFICATION=true       # Enable content verification via hashes
+
+# Gateway provider configuration
+VITE_WAYFINDER_GATEWAY_PROVIDER=network       # Options: network, static, simple-cache
+VITE_WAYFINDER_GATEWAY_LIMIT=5               # Max gateways for routing (default: 5)
+VITE_WAYFINDER_STATIC_GATEWAYS=https://arweave.net,https://permagate.io
+VITE_WAYFINDER_CACHE_TIMEOUT=1               # Gateway cache TTL in minutes
+
+# Verification configuration  
+VITE_WAYFINDER_VERIFICATION_STRATEGY=hash     # Options: hash, none
+VITE_WAYFINDER_TRUSTED_GATEWAYS=https://permagate.io,https://vilenarios.com
+VITE_WAYFINDER_VERIFICATION_TIMEOUT=10000    # Verification timeout in milliseconds
 ```
 
 **Gateway Notes**:
@@ -200,10 +213,12 @@ VITE_ENABLE_WAYFINDER=true    # Enable AR.IO Wayfinder integration (disabled by 
 - AR.IO gateways offer enhanced performance and reliability
 
 **Wayfinder Notes**:
-- Wayfinder disabled by default (experimental feature)
-- Set `VITE_ENABLE_WAYFINDER=true` to enable verified content delivery
-- Automatically falls back to direct gateways if unavailable
-- Uses AR.IO network dynamic routing with trusted gateway verification
+- **All Wayfinder features disabled by default** (experimental)
+- **Granular control**: Enable routing and verification independently
+- **Provider options**: `network` (AR.IO), `static` (custom list), `simple-cache` (cached network)
+- **Verification strategies**: `hash` (cryptographic), `none` (disabled)
+- **Auto-fallback**: Direct gateways when Wayfinder unavailable
+- **Configuration persistence**: Settings saved to localStorage for user preferences
 
 ---
 

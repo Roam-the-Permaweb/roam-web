@@ -29,7 +29,9 @@ import {
   Heart,
   Layers,
   CheckCircle,
-  AlertTriangle
+  AlertTriangle,
+  Settings,
+  RotateCcw
 } from 'lucide-preact'
 
 interface IconProps {
@@ -103,7 +105,11 @@ export const Icons = {
   
   // Verification icons
   CheckCircle: (props: IconProps) => <CheckCircle size={12} {...props} />,
-  AlertTriangle: (props: IconProps) => <AlertTriangle size={12} {...props} />
+  AlertTriangle: (props: IconProps) => <AlertTriangle size={12} {...props} />,
+  
+  // Advanced settings icons
+  Settings: (props: IconProps) => <Settings size={16} {...props} />,
+  RotateCcw: (props: IconProps) => <RotateCcw size={16} {...props} />
 }
 
 // Helper function to get media type icon

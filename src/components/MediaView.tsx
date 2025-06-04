@@ -48,7 +48,6 @@ export interface MediaViewProps {
   onZoom?: (src: string) => void;
   onCorrupt?: (txMeta: TxMeta) => void;
   loading?: boolean;
-  wayfinderLoading?: boolean;
   onShare?: () => void;
   onDownload?: () => void;
   onOpenInNewTab?: () => void;
@@ -61,7 +60,6 @@ export const MediaView = ({
   onPrivacyToggle,
   onZoom,
   onCorrupt,
-  wayfinderLoading = false,
   onShare,
   onDownload,
   onOpenInNewTab
@@ -435,8 +433,8 @@ useEffect(() => {
         {renderMedia()}
         {privacyOn && <div className="privacy-screen" />}
         
-        {/* Subtle loading indicator for Wayfinder */}
-        {wayfinderLoading && (
+        {/* Subtle loading indicator for Wayfinder - only show when actually verifying */}
+        {wayfinderResult.loading && wayfinderResult.verificationStatus.status === 'verifying' && (
           <div className="wayfinder-loading-overlay">
             <div className="wayfinder-loading-indicator">
               <Icons.Loading size={16} />

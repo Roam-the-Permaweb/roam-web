@@ -55,6 +55,7 @@ export function useWayfinderContent(
     }
 
     let cancelled = false
+    let pollInterval: any = null
 
     // Register event listener BEFORE making the request to avoid race conditions
     const handleVerificationEvent = (event: any) => {
@@ -111,27 +112,45 @@ export function useWayfinderContent(
           contentType: response.contentType
         }))
 
-        // Add fallback verification status check for missed events (especially for videos)
-        if (currentVerificationStatus.status === 'verifying') {
-          logger.debug(`Setting up verification status fallback check for ${txId}`)
-          const fallbackCheck = setTimeout(() => {
-            if (!cancelled) {
-              const latestStatus = wayfinderService.getVerificationStatus(txId)
-              if (latestStatus.status === 'verified') {
-                logger.debug(`Fallback check found verification completed for ${txId}`)
-                setResult(prev => ({
-                  ...prev,
-                  verified: true,
-                  verificationStatus: latestStatus
-                }))
-              }
+        // Add verification status polling for missed events
+        if (currentVerificationStatus.status === 'verifying' || currentVerificationStatus.status === 'pending') {
+          logger.debug(`Setting up verification status polling for ${txId} (status: ${currentVerificationStatus.status})`)
+          
+          let pollCount = 0
+          const maxPolls = 10 // Poll up to 10 times
+          
+          pollInterval = setInterval(() => {
+            if (cancelled) {
+              clearInterval(pollInterval)
+              return
             }
-          }, 2000) // Check again after 2 seconds
-
-          // Store timeout reference for cleanup
-          if (!cancelled) {
-            setTimeout(() => clearTimeout(fallbackCheck), 10000) // Clear after 10 seconds max
-          }
+            
+            pollCount++
+            const latestStatus = wayfinderService.getVerificationStatus(txId)
+            
+            // Update if status changed
+            setResult(prev => {
+              if (latestStatus.status !== prev.verificationStatus.status || 
+                  (latestStatus.status === 'verified' && !prev.verified)) {
+                logger.debug(`Polling detected status change for ${txId}: ${prev.verificationStatus.status} -> ${latestStatus.status}`)
+                return {
+                  ...prev,
+                  verified: latestStatus.status === 'verified',
+                  verificationStatus: latestStatus
+                }
+              }
+              return prev
+            })
+            
+            // Stop polling if verified, failed, or max polls reached
+            if (latestStatus.status === 'verified' || 
+                latestStatus.status === 'failed' || 
+                pollCount >= maxPolls) {
+              logger.debug(`Stopping verification polling for ${txId} (status: ${latestStatus.status}, polls: ${pollCount})`)
+              clearInterval(pollInterval)
+              pollInterval = null
+            }
+          }, 1000) // Poll every second
         }
 
       } catch (error) {
@@ -159,8 +178,12 @@ export function useWayfinderContent(
     return () => {
       cancelled = true
       wayfinderService.removeEventListener(handleVerificationEvent)
+      if (pollInterval) {
+        clearInterval(pollInterval)
+        pollInterval = null
+      }
     }
-  }, [txId, path, forceLoad, contentType, size])
+  }, [txId, path, forceLoad]) // Removed contentType and size to prevent unnecessary re-requests
 
   return result
 }

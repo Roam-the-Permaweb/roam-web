@@ -16,6 +16,9 @@ Roam v0.2.0 introduces **AR.IO Wayfinder integration**, bringing cryptographic c
 - **Complete AR.IO SDK integration** with dynamic gateway routing
 - **Hash-based content verification** via trusted gateways
 - **Real-time verification indicators** with green checkmarks, loading spinners, and error states
+- **Advanced in-app configuration UI** with granular control over all Wayfinder features
+- **Real-time validation** with instant feedback for invalid gateway URLs
+- **Connection status monitoring** with live indicators for Wayfinder availability
 - **Seamless fallback** to direct gateways when Wayfinder unavailable
 
 ### 🚀 **Intelligent Content Caching**
@@ -69,6 +72,7 @@ Roam v0.2.0 introduces **AR.IO Wayfinder integration**, bringing cryptographic c
 
 ### **New UI Components** (`/src/components/`)
 - **`VerificationIndicator.tsx`** - Real-time verification status display
+- **Enhanced `ChannelsDrawer.tsx`** - Advanced Wayfinder configuration interface
 
 ### **Updated Components**
 - **`MediaView.tsx`** - Enhanced with size-aware loading and Wayfinder integration
@@ -77,6 +81,14 @@ Roam v0.2.0 introduces **AR.IO Wayfinder integration**, bringing cryptographic c
 ---
 
 ## 📱 **User Experience Enhancements**
+
+### **Advanced Configuration Interface**
+- **In-app settings panel** - Configure all Wayfinder features directly in the Channels drawer
+- **Granular control** - Independent toggles for routing, verification, and provider selection
+- **Real-time validation** - Instant feedback for invalid gateway URLs with detailed error messages
+- **Connection monitoring** - Live status indicators showing Wayfinder connectivity
+- **Auto-dependency logic** - Smart enabling/disabling of related features
+- **Reset to defaults** - One-click restoration of safe experimental settings
 
 ### **Transparent Verification**
 - **Subtle UI indicators** that don't disrupt content browsing flow
@@ -91,7 +103,7 @@ Roam v0.2.0 introduces **AR.IO Wayfinder integration**, bringing cryptographic c
 ### **Experimental Integration**
 - **Disabled by default** - Wayfinder is experimental and requires explicit enablement
 - **Zero breaking changes** - all existing functionality preserved when disabled
-- **Opt-in enhancement** - set `VITE_ENABLE_WAYFINDER=true` to enable verification
+- **Flexible configuration** - Environment variables OR in-app UI settings
 - **Graceful degradation** - app works perfectly even if Wayfinder unavailable
 
 ---
@@ -100,11 +112,40 @@ Roam v0.2.0 introduces **AR.IO Wayfinder integration**, bringing cryptographic c
 
 ### **New Environment Variables**
 ```bash
-# Optional - Wayfinder disabled by default (experimental)
-VITE_ENABLE_WAYFINDER=true    # Set to enable AR.IO Wayfinder integration
+# Master Wayfinder controls (all disabled by default - experimental)
+VITE_ENABLE_WAYFINDER=true                    # Legacy master switch
+VITE_WAYFINDER_ENABLE_ROUTING=true            # Smart gateway selection via AR.IO
+VITE_WAYFINDER_ENABLE_VERIFICATION=true       # Content verification via hashes
+
+# Gateway provider configuration
+VITE_WAYFINDER_GATEWAY_PROVIDER=network       # Options: network, static, simple-cache
+VITE_WAYFINDER_GATEWAY_LIMIT=5               # Max gateways for routing
+VITE_WAYFINDER_STATIC_GATEWAYS=https://arweave.net,https://permagate.io
+VITE_WAYFINDER_CACHE_TIMEOUT=1               # Gateway cache TTL in minutes
+
+# Verification configuration  
+VITE_WAYFINDER_VERIFICATION_STRATEGY=hash     # Options: hash, none
+VITE_WAYFINDER_TRUSTED_GATEWAYS=https://permagate.io,https://vilenarios.com
+VITE_WAYFINDER_VERIFICATION_TIMEOUT=10000    # Verification timeout in milliseconds
 ```
 
-### **Wayfinder Configuration**
+### **Advanced In-App Configuration UI**
+- **Comprehensive Settings Panel**: Configure all Wayfinder features directly in the Channels drawer
+- **Real-time Validation**: Instant feedback for invalid gateway URLs with detailed error messages
+- **Connection Status**: Live indicators showing Wayfinder service connectivity and health
+- **Auto-dependency Logic**: Smart enabling/disabling of related features for consistency
+- **Visual Error Feedback**: Red borders and inline error messages for invalid configurations
+- **One-click Reset**: Restore all experimental settings to safe defaults instantly
+
+### **Granular Wayfinder Configuration**
+- **Independent Controls**: Enable routing and verification separately for precise control
+- **Provider Flexibility**: Choose between network (AR.IO), static (custom), or simple-cache providers
+- **Verification Options**: Select hash-based cryptographic verification or disable entirely
+- **Custom Gateway Lists**: Define your own static and trusted gateway collections
+- **Performance Tuning**: Configure timeouts, limits, and cache TTL for optimal performance
+- **Configuration Persistence**: User preferences automatically saved to localStorage
+
+### **Default Configuration** (All Experimental Features Disabled)
 - **Gateway Limit**: Top 5 AR.IO gateways by operator stake
 - **Cache TTL**: 1-minute for optimal balance of freshness and performance  
 - **Verification Timeout**: 10 seconds for reliability

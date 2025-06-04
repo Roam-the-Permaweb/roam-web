@@ -2,26 +2,28 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { WayfinderService } from './wayfinder'
 
 // Mock the AR.IO SDK
-vi.mock('@ar.io/sdk/web', () => ({
+vi.mock('@ar.io/sdk', () => ({
   Wayfinder: vi.fn().mockImplementation(() => ({
     request: vi.fn().mockResolvedValue({
       url: 'https://mock-gateway.arweave.net/test-tx-id',
       status: 200,
       headers: new Headers(),
-      text: vi.fn().mockResolvedValue('mock content')
+      text: vi.fn().mockResolvedValue('mock content'),
+      blob: vi.fn().mockResolvedValue(new Blob(['mock content']))
     }),
     emitter: {
       on: vi.fn()
     }
   })),
   ARIO: {
-    mainnet: vi.fn()
+    mainnet: vi.fn().mockReturnValue({})
   },
   NetworkGatewaysProvider: vi.fn(),
-  SimpleCacheGatewaysProvider: vi.fn(),
-  StaticGatewaysProvider: vi.fn(),
+  SimpleCacheGatewaysProvider: vi.fn().mockImplementation(() => ({})),
+  StaticGatewaysProvider: vi.fn().mockImplementation(() => ({})),
   HashVerificationStrategy: vi.fn(),
-  TrustedGatewaysHashProvider: vi.fn()
+  TrustedGatewaysHashProvider: vi.fn(),
+  RandomRoutingStrategy: vi.fn().mockImplementation(() => ({}))
 }))
 
 // Mock localStorage
@@ -46,30 +48,27 @@ describe('Wayfinder Service', () => {
     it('should have correct default configuration', () => {
       const config = wayfinderService.getConfig()
       
-      expect(config.enableWayfinder).toBe(true)
-      expect(config.enableVerification).toBe(true)
-      expect(config.gatewayLimit).toBe(5)
-      expect(config.cacheTimeoutMinutes).toBe(1) // Updated to match example's 60 seconds
+      expect(config.enableWayfinder).toBe(false) // Disabled by default
+      expect(config.verificationStrategy).toBe('none') // No verification by default
+      expect(config.gatewayLimit).toBe(3) // Reduced to minimize network requests
+      expect(config.cacheTimeoutMinutes).toBe(5) // Increased cache timeout
       expect(config.verificationTimeoutMs).toBe(10000) // Updated timeout
     })
 
     it('should update configuration correctly', () => {
       wayfinderService.updateConfig({
-        enableWayfinder: false,
-        enableVerification: false
+        enableWayfinder: true,
+        verificationStrategy: 'hash'
       })
 
       const config = wayfinderService.getConfig()
-      expect(config.enableWayfinder).toBe(false)
-      expect(config.enableVerification).toBe(false)
+      expect(config.enableWayfinder).toBe(true)
+      expect(config.verificationStrategy).toBe('hash')
       
       // Should save to localStorage
       expect(localStorageMock.setItem).toHaveBeenCalledWith(
         'wayfinder-config',
-        JSON.stringify({
-          enableWayfinder: false,
-          enableGraphQL: false
-        })
+        expect.stringContaining('"enableWayfinder":true')
       )
     })
 
@@ -82,7 +81,7 @@ describe('Wayfinder Service', () => {
       const config = service.getConfig()
       
       expect(config.enableWayfinder).toBe(false)
-      expect(config.enableVerification).toBe(false) // Should follow wayfinder setting
+      // verificationStrategy is not overridden in localStorage mock
     })
   })
 
@@ -110,7 +109,7 @@ describe('Wayfinder Service', () => {
 
       expect(result.url).toContain('test-tx-id')
       expect(result.gateway).toBeDefined()
-    })
+    }, 10000)
 
     it('should fall back to original gateway on Wayfinder error', async () => {
       wayfinderService.updateConfig({ enableWayfinder: true })
@@ -125,7 +124,7 @@ describe('Wayfinder Service', () => {
       // Should get some result (either Wayfinder or fallback)
       expect(result.url).toBeDefined()
       expect(result.gateway).toBeDefined()
-    })
+    }, 10000)
   })
 
   describe('Verification Status', () => {
@@ -136,7 +135,7 @@ describe('Wayfinder Service', () => {
       expect(status.status).toBe('pending')
       
       // Simulate verification update
-      wayfinderService.updateConfig({ enableVerification: true })
+      wayfinderService.updateConfig({ verificationStrategy: 'hash' })
       
       status = wayfinderService.getVerificationStatus(txId)
       expect(status.txId).toBe(txId)

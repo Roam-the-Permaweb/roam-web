@@ -148,6 +148,27 @@ ArFS media type fetches JSON metadata first, then extracts `dataTxId` for actual
 - `VITE_GATEWAYS_GRAPHQL` - Comma-separated GraphQL endpoints (required)
 - `VITE_GATEWAYS_DATA_SOURCE` - Content delivery gateways
 
+**Wayfinder Configuration** (All disabled by default - experimental):
+
+**In-App Configuration UI**: All Wayfinder settings can be configured directly in the Channels drawer with:
+- **Real-time validation** - Instant feedback for invalid gateway URLs
+- **Connection monitoring** - Live status indicators for Wayfinder connectivity  
+- **Auto-dependency logic** - Smart enabling/disabling of related features
+- **Visual error feedback** - Red borders and inline messages for validation errors
+- **One-click reset** - Restore all settings to safe defaults
+
+**Environment Variables** (optional - can be overridden by UI):
+- `VITE_ENABLE_WAYFINDER` - Legacy master switch for Wayfinder integration
+- `VITE_WAYFINDER_ENABLE_ROUTING` - Smart gateway selection via AR.IO network
+- `VITE_WAYFINDER_ENABLE_VERIFICATION` - Content verification via cryptographic hashes
+- `VITE_WAYFINDER_GATEWAY_PROVIDER` - Provider type: network, static, simple-cache
+- `VITE_WAYFINDER_GATEWAY_LIMIT` - Maximum gateways for routing (default: 5)
+- `VITE_WAYFINDER_STATIC_GATEWAYS` - Custom gateway list for static provider
+- `VITE_WAYFINDER_CACHE_TIMEOUT` - Gateway cache TTL in minutes (default: 1)
+- `VITE_WAYFINDER_VERIFICATION_STRATEGY` - Verification method: hash, none
+- `VITE_WAYFINDER_TRUSTED_GATEWAYS` - Gateways for hash verification
+- `VITE_WAYFINDER_VERIFICATION_TIMEOUT` - Verification timeout in milliseconds
+
 **Gateway Configuration**:
 App supports "self" gateway mapping that derives data gateway from current hostname (e.g., `roam_user.ardrive.net` → `ardrive.net`).
 

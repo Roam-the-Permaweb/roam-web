@@ -10,12 +10,22 @@ export interface VerificationStatus {
 }
 
 export interface WayfinderConfig {
-  enableVerification: boolean
-  enableWayfinder: boolean
-  gatewayLimit: number
-  cacheTimeoutMinutes: number
-  verificationTimeoutMs: number
-  fallbackGateways: string[]
+  // Master switch
+  enableWayfinder: boolean        // Enable both routing and verification
+  
+  // Gateway provider configuration
+  gatewayProvider: 'network' | 'static' | 'simple-cache'
+  gatewayLimit: number           // Max gateways to consider for routing
+  staticGateways: string[]       // Gateway list for static provider
+  cacheTimeoutMinutes: number    // TTL for cached gateway lists
+  
+  // Verification configuration
+  verificationStrategy: 'hash' | 'none'
+  trustedGateways: string[]      // Gateways used for verification hash comparison
+  verificationTimeoutMs: number  // Timeout for verification process
+  
+  // Fallback configuration
+  fallbackGateways: string[]     // Direct gateways when Wayfinder unavailable
 }
 
 export interface ContentRequest {
