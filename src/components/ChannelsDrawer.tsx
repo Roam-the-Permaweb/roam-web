@@ -419,7 +419,7 @@ export function ChannelsDrawer({
                         min="1000"
                         max="30000"
                         step="1000"
-                        onChange={(e) => updateWayfinderSettings({ verificationTimeoutMs: parseInt(e.currentTarget.value) || 15000 })}
+                        onChange={(e) => updateWayfinderSettings({ verificationTimeoutMs: parseInt(e.currentTarget.value) || 20000 })}
                       />
                     </div>
                   </div>

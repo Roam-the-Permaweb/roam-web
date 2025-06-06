@@ -95,7 +95,7 @@ const DEFAULT_CONFIG: WayfinderConfig = {
   // Verification configuration  
   verificationStrategy: 'hash',  // Changed to hash-based verification by default
   trustedGateways: ['https://permagate.io', 'https://vilenarios.com'],
-  verificationTimeoutMs: 15000,
+  verificationTimeoutMs: 20000,
   
   // AO Configuration
   aoCuUrl: 'https://cu.ardrive.io',  // Default AO Compute Unit URL
@@ -111,6 +111,7 @@ class WayfinderService {
   private eventListeners = new Set<(event: VerificationEvent) => void>()
   private urlCache = new Map<string, { url: string; timestamp: number; gateway: string }>()
   private contentCache = new Map<string, CachedContent>()
+  // Note: AR.IO SDK does not currently expose x-ar-io-digest hashes in its public API
   private initialized = false
   private lastCleanup = 0
 
@@ -150,10 +151,13 @@ class WayfinderService {
         routingStrategy,
         events: {
           onVerificationSucceeded: (event) => {
+            // Try to extract gateway from event
+            const gateway = (event as any).gateway || (event as any).gatewayUrl || this.extractGatewayFromUrl((event as any).url || '') || 'verified'
+            
             this.handleVerificationEvent({
               type: 'verification-completed',
               txId: event.txId,
-              gateway: 'verified',
+              gateway,
               timestamp: Date.now()
             })
           },
@@ -324,7 +328,7 @@ class WayfinderService {
     }
 
     if (config.verificationTimeoutMs <= 0) {
-      config.verificationTimeoutMs = 15000
+      config.verificationTimeoutMs = 20000
     }
 
     if (config.cacheTimeoutMinutes <= 0) {
@@ -432,11 +436,13 @@ class WayfinderService {
    */
   private createVerificationStrategy() {
     if (!this.config.enableWayfinder || this.config.verificationStrategy === 'none') {
+      logger.info('Verification strategy: disabled (none or Wayfinder disabled)')
       return undefined
     }
 
     switch (this.config.verificationStrategy) {
       case 'hash':
+        logger.info(`Verification strategy: hash with trusted gateways: ${this.config.trustedGateways.join(', ')}`)
         return new HashVerificationStrategy({
           trustedHashProvider: new TrustedGatewaysHashProvider({
             gatewaysProvider: new StaticGatewaysProvider({
@@ -446,6 +452,7 @@ class WayfinderService {
         })
 
       default:
+        logger.warn('Unknown verification strategy:', this.config.verificationStrategy)
         return undefined
     }
   }
@@ -518,11 +525,14 @@ class WayfinderService {
     // Check URL cache for metadata-only response
     const urlCached = this.urlCache.get(cacheKey)
     if (urlCached && Date.now() - urlCached.timestamp < this.config.cacheTimeoutMinutes * 60 * 1000) {
+      const currentVerificationStatus = this.getVerificationStatus(txId)
+      const isVerified = currentVerificationStatus.status === 'verified'
+      
       return {
         url: urlCached.url,
         gateway: urlCached.gateway,
-        verified: false, // URL cache doesn't store verification status
-        verificationStatus: this.getVerificationStatus(txId),
+        verified: isVerified, // Use actual verification status from memory
+        verificationStatus: currentVerificationStatus,
         data: null, // No data in URL-only cache
         contentType: null, // Will be determined by caller
         fromCache: true
@@ -602,6 +612,12 @@ class WayfinderService {
             const textData = await response.text()
             data = new Blob([textData], {type: contentType})
           }
+          
+          // The verification hash will come from the trusted gateways via verification events
+          
+          // Note: We only want to display the x-ar-io-digest from trusted gateways, 
+          // not self-computed hashes. The verification hash should come from the verification events.
+          
         } catch (error) {
           logger.error(`Failed to process content for ${txId}:`, error)
           throw error
@@ -685,18 +701,24 @@ class WayfinderService {
     const fallbackGateway = this.config.fallbackGateways[0] || determineFallbackGateway()
     const url = `${fallbackGateway}/${txId}${path}`
 
-    this.setVerificationStatus(txId, {
-      txId,
-      status: 'not-verified',
-      gateway: fallbackGateway,
-      timestamp: Date.now()
-    })
+    // Only set to 'not-verified' if there's no existing verification status
+    // This preserves verified status for content that was previously verified
+    const currentStatus = this.getVerificationStatus(txId)
+    if (currentStatus.status === 'pending') {
+      this.setVerificationStatus(txId, {
+        txId,
+        status: 'not-verified',
+        gateway: fallbackGateway,
+        timestamp: Date.now()
+      })
+    }
 
+    const finalStatus = this.getVerificationStatus(txId)
     return {
       url,
       gateway: fallbackGateway,
-      verified: false,
-      verificationStatus: this.getVerificationStatus(txId),
+      verified: finalStatus.status === 'verified',
+      verificationStatus: finalStatus,
       data: null,
       contentType: null,
       fromCache: false
@@ -758,6 +780,7 @@ class WayfinderService {
         })
         break
       case 'verification-completed':
+        logger.info(`Verification completed for ${event.txId}`)
         this.setVerificationStatus(event.txId, {
           ...currentStatus,
           status: 'verified',

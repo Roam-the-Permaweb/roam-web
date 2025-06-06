@@ -176,7 +176,7 @@
 }
 
 .media-wrapper.content-audio {
-  min-height: 250px;
+  min-height: 280px;
 }
 
 @media (min-width: 768px) {
@@ -198,18 +198,18 @@
 
 @media (max-width: 480px) {
   .media-wrapper.content-image {
-    min-height: 220px;
+    min-height: 280px;
   }
   
   .media-wrapper.content-text,
   .media-wrapper.content-pdf,
   .media-wrapper.content-website {
     max-height: 65vh; /* Increased from 60vh for mobile */
-    min-height: 160px;
+    min-height: 280px;
   }
   
   .media-wrapper.content-audio {
-    min-height: 220px;
+    min-height: 280px;
   }
 }
 

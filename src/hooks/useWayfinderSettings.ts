@@ -63,7 +63,7 @@ export function useWayfinderSettings(): UseWayfinderSettingsResult {
     // Verification configuration
     verificationStrategy: 'hash',
     trustedGateways: ['https://permagate.io', 'https://vilenarios.com'],
-    verificationTimeoutMs: 15000,
+    verificationTimeoutMs: 20000,
     
     // AO Configuration
     aoCuUrl: 'https://cu.ardrive.io',
@@ -255,7 +255,7 @@ export function useWayfinderSettings(): UseWayfinderSettingsResult {
       routingTimeoutMs: 500,
       verificationStrategy: 'hash',
       trustedGateways: ['https://permagate.io', 'https://vilenarios.com'],
-      verificationTimeoutMs: 15000,
+      verificationTimeoutMs: 20000,
       aoCuUrl: 'https://cu.ardrive.io',
       enableGraphQL: false
     }

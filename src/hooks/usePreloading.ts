@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'preact/hooks'
 import { peekNextTransactions } from '../engine/fetchQueue'
 import { GATEWAY_DATA_SOURCE } from '../engine/fetchQueue'
 import { wayfinderService } from '../services/wayfinder'
-import { logger } from '../utils/logger'
 import type { TxMeta, Channel } from '../constants'
 
 // Cache for preloaded content
@@ -10,16 +9,13 @@ const preloadCache = new Map<string, boolean>()
 
 export function usePreloading(currentTx: TxMeta | null, channel: Channel) {
   const preloadTimeoutRef = useRef<number | null>(null)
-  
-  // Temporarily disable preloading for easier Wayfinder troubleshooting
-  logger.debug('Preloading disabled for Wayfinder troubleshooting')
-  return
 
   const preloadContent = async (tx: TxMeta) => {
     const dataTxId = tx.arfsMeta?.dataTxId || tx.id
     const contentType = tx.arfsMeta?.contentType || 
                         tx.tags.find(t => t.name === 'Content-Type')?.value || 
                         ''
+    const size = tx.arfsMeta?.size
     const cacheKey = `${dataTxId}-${contentType}`
     
     // Skip if already preloaded
@@ -28,48 +24,69 @@ export function usePreloading(currentTx: TxMeta | null, channel: Channel) {
     }
 
     try {
-      // Get URL via Wayfinder or fallback to original gateway
-      let contentUrl: string
-      try {
-        const wayfinderResult = await wayfinderService.getContentUrl({ txId: dataTxId })
-        contentUrl = wayfinderResult.url
-        logger.debug(`Using Wayfinder URL for preload: ${dataTxId}`)
-      } catch (error) {
-        // Fallback to original gateway
-        contentUrl = `${GATEWAY_DATA_SOURCE[0]}/${dataTxId}`
-        logger.debug(`Fallback to original gateway for preload: ${dataTxId}`)
+      // Check if Wayfinder is available for verification + routing
+      const isWayfinderAvailable = await wayfinderService.isAvailable()
+      
+      // Prepare content request with size info for intelligent loading
+      const contentRequest = {
+        txId: dataTxId,
+        contentType,
+        size
       }
       
-      // Only preload lightweight content types
+      // Get URL via Wayfinder (with verification) or fallback
+      let contentUrl: string
+      
+      if (isWayfinderAvailable) {
+        try {
+          const wayfinderResult = await wayfinderService.getContentUrl(contentRequest)
+          contentUrl = wayfinderResult.url
+        } catch (error) {
+          // Fallback to original gateway
+          contentUrl = `${GATEWAY_DATA_SOURCE[0]}/${dataTxId}`
+        }
+      } else {
+        // Wayfinder disabled, use direct gateway
+        contentUrl = `${GATEWAY_DATA_SOURCE[0]}/${dataTxId}`
+      }
+      
+      // Only preload lightweight content types to save bandwidth
       if (contentType.startsWith('image/') && contentType !== 'image/gif') {
+        // Skip large images (>5MB) for preloading
+        if (size && size > 5 * 1024 * 1024) {
+          return
+        }
+        
         // Preload images (except GIFs which can be large)
         const img = new Image()
         img.crossOrigin = 'anonymous'
         img.onload = () => {
           preloadCache.set(cacheKey, true)
-          logger.debug(`Preloaded image: ${dataTxId}`)
         }
         img.onerror = () => {
-          logger.debug(`Failed to preload image: ${dataTxId}`)
+          // Silent fail for preloading
         }
         img.src = contentUrl
       } 
       else if (contentType.startsWith('text/') || contentType === 'application/json') {
-        // Preload text content
+        // Skip large text files (>1MB) for preloading
+        if (size && size > 1024 * 1024) {
+          return
+        }
+        
+        // Preload text content with HEAD request
         const response = await fetch(contentUrl, {
-          method: 'HEAD', // Just check if it exists, don't download
+          method: 'HEAD',
+          mode: 'cors'
         })
         if (response.ok) {
           preloadCache.set(cacheKey, true)
-          logger.debug(`Preloaded text: ${dataTxId}`)
         }
       }
-      // Skip video/audio preloading to save bandwidth
-      else {
-        logger.debug(`Skipping preload for ${contentType}: ${dataTxId}`)
-      }
+      // Skip video/audio preloading entirely to save bandwidth
+      
     } catch (error) {
-      logger.debug(`Preload failed for ${dataTxId}:`, error)
+      // Silent fail for preloading - don't spam logs
     }
   }
 
@@ -91,7 +108,7 @@ export function usePreloading(currentTx: TxMeta | null, channel: Channel) {
           await preloadContent(tx)
         }
       } catch (error) {
-        logger.debug('Preloading failed:', error)
+        // Silent fail for preloading
       }
     }, 1000) // 1 second delay
 
@@ -112,7 +129,6 @@ export function usePreloading(currentTx: TxMeta | null, channel: Channel) {
         for (let i = 0; i < 25; i++) {
           preloadCache.delete(entries[i])
         }
-        logger.debug('Cleaned up preload cache')
       }
     }, 5 * 60 * 1000) // Every 5 minutes
 
