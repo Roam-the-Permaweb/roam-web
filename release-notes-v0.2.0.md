@@ -36,8 +36,9 @@ Roam v0.2.0 introduces **AR.IO Wayfinder integration**, bringing cryptographic c
 ### 🛡️ **Enhanced Security & Verification**
 - **Dual trusted gateways**: permagate.io and vilenarios.com for verification
 - **Dynamic gateway routing** via AR.IO network with stake-based selection
-- **Cryptographic validation** through x-ar-io-digest header comparison
+- **Hash-based content verification** via AR.IO SDK trusted gateway comparison
 - **Single verified fetch** per content item - no double-fetching or re-validation
+- **Verification status display** in transaction details for verified content
 
 ---
 
@@ -77,6 +78,7 @@ Roam v0.2.0 introduces **AR.IO Wayfinder integration**, bringing cryptographic c
 ### **Updated Components**
 - **`MediaView.tsx`** - Enhanced with size-aware loading and Wayfinder integration
 - **`TransactionInfo.tsx`** - Displays verification status in footer metadata
+- **`DetailsDrawer.tsx`** - Shows verification status and method for verified content
 
 ---
 
@@ -170,7 +172,7 @@ VITE_WAYFINDER_VERIFICATION_TIMEOUT=10000    # Verification timeout in milliseco
 
 ### **Content Verification**
 - **Hash-based validation** using AR.IO network's trusted gateway providers
-- **Cryptographic integrity** verification through x-ar-io-digest headers
+- **Cryptographic integrity** verification via AR.IO SDK internal hash comparison
 - **Dual gateway verification** for enhanced security and reliability
 
 ### **Secure Content Delivery**
