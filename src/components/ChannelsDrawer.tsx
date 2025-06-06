@@ -188,14 +188,6 @@ export function ChannelsDrawer({
           <div className="section-header">
             <div className="section-title-with-status">
               <h2 className="section-title">AR.IO Wayfinder (Experimental)</h2>
-              {wayfinderSettings.enableWayfinder && (
-                <div className={`connection-status connected`}>
-                  <div className="status-indicator" />
-                  <span className="status-text">
-                    Enabled
-                  </span>
-                </div>
-              )}
             </div>
             <button 
               className={`advanced-toggle ${showAdvanced ? 'active' : ''}`}
@@ -308,12 +300,101 @@ export function ChannelsDrawer({
                 </div>
 
                 <div className="subsection">
+                  <h3 className="subsection-title">Routing Strategy</h3>
+                  
+                  <div className="setting-row">
+                    <div className="setting-info">
+                      <span className="setting-label">Strategy Type</span>
+                      <span className="setting-description">How gateways are selected for content delivery</span>
+                    </div>
+                    <select 
+                      className="setting-select"
+                      value={wayfinderSettings.routingStrategy}
+                      onChange={(e) => updateWayfinderSettings({ routingStrategy: e.currentTarget.value as 'random' | 'fastest-ping' | 'round-robin' | 'static' | 'preferred-fallback' })}
+                    >
+                      <option value="random">Random</option>
+                      <option value="fastest-ping">Fastest Ping</option>
+                      <option value="round-robin">Round Robin</option>
+                      <option value="static">Static Gateway</option>
+                      <option value="preferred-fallback">Preferred + Fallback</option>
+                    </select>
+                  </div>
+
+                  {wayfinderSettings.routingStrategy === 'static' && (
+                    <div className="setting-row">
+                      <div className="setting-info">
+                        <span className="setting-label">Static Gateway URL</span>
+                        <span className="setting-description">Single gateway to use for all requests</span>
+                      </div>
+                      <div>
+                        <input 
+                          type="url"
+                          className={`setting-input ${validationErrors.staticRoutingGateway ? 'error' : ''}`}
+                          value={wayfinderSettings.staticRoutingGateway}
+                          placeholder="https://arweave.net"
+                          onChange={(e) => updateWayfinderSettings({ staticRoutingGateway: e.currentTarget.value.trim() })}
+                        />
+                        {validationErrors.staticRoutingGateway && (
+                          <div className="validation-error">{validationErrors.staticRoutingGateway}</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {wayfinderSettings.routingStrategy === 'preferred-fallback' && (
+                    <div className="setting-row">
+                      <div className="setting-info">
+                        <span className="setting-label">Preferred Gateway URL</span>
+                        <span className="setting-description">Primary gateway, falls back to random if unavailable</span>
+                      </div>
+                      <div>
+                        <input 
+                          type="url"
+                          className={`setting-input ${validationErrors.preferredGateway ? 'error' : ''}`}
+                          value={wayfinderSettings.preferredGateway}
+                          placeholder="https://arweave.net"
+                          onChange={(e) => updateWayfinderSettings({ preferredGateway: e.currentTarget.value.trim() })}
+                        />
+                        {validationErrors.preferredGateway && (
+                          <div className="validation-error">{validationErrors.preferredGateway}</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {wayfinderSettings.routingStrategy === 'fastest-ping' && (
+                    <div className="setting-row">
+                      <div className="setting-info">
+                        <span className="setting-label">Ping Timeout (ms)</span>
+                        <span className="setting-description">Maximum time to wait for ping responses</span>
+                      </div>
+                      <div>
+                        <input 
+                          type="number"
+                          className="setting-input"
+                          value={wayfinderSettings.routingTimeoutMs}
+                          min="100"
+                          max="5000"
+                          step="100"
+                          onChange={(e) => updateWayfinderSettings({ routingTimeoutMs: parseInt(e.currentTarget.value) || 500 })}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="subsection">
                   <h3 className="subsection-title">Verification Settings</h3>
                   
                   <div className="setting-row">
                     <div className="setting-info">
                       <span className="setting-label">Verification Strategy</span>
-                      <span className="setting-description">Method used for content verification</span>
+                      <span className="setting-description">
+                        Method used for content verification
+                        {wayfinderSettings.verificationStrategy === 'hash' && 
+                          " - Compares hashes from multiple trusted gateways"
+                        }
+                      </span>
                     </div>
                     <select 
                       className="setting-select"
@@ -330,22 +411,26 @@ export function ChannelsDrawer({
                       <span className="setting-label">Verification Timeout</span>
                       <span className="setting-description">Maximum verification time (ms)</span>
                     </div>
-                    <input 
-                      type="number"
-                      className="setting-input"
-                      value={wayfinderSettings.verificationTimeoutMs}
-                      min="1000"
-                      max="30000"
-                      step="1000"
-                      onChange={(e) => updateWayfinderSettings({ verificationTimeoutMs: parseInt(e.currentTarget.value) || 10000 })}
-                    />
+                    <div>
+                      <input 
+                        type="number"
+                        className="setting-input"
+                        value={wayfinderSettings.verificationTimeoutMs}
+                        min="1000"
+                        max="30000"
+                        step="1000"
+                        onChange={(e) => updateWayfinderSettings({ verificationTimeoutMs: parseInt(e.currentTarget.value) || 15000 })}
+                      />
+                    </div>
                   </div>
 
                   {wayfinderSettings.verificationStrategy === 'hash' && (
                     <div className="setting-row">
                       <div className="setting-info">
                         <span className="setting-label">Trusted Gateways</span>
-                        <span className="setting-description">Gateways used for hash verification</span>
+                        <span className="setting-description">
+                          Gateways used for hash comparison verification
+                        </span>
                       </div>
                       <div>
                         <textarea 
@@ -363,6 +448,29 @@ export function ChannelsDrawer({
                       </div>
                     </div>
                   )}
+                </div>
+
+                <div className="subsection">
+                  <h3 className="subsection-title">AO Configuration</h3>
+                  
+                  <div className="setting-row">
+                    <div className="setting-info">
+                      <span className="setting-label">AO Compute Unit URL</span>
+                      <span className="setting-description">Custom AO CU for AR.IO network operations</span>
+                    </div>
+                    <div>
+                      <input 
+                        type="url"
+                        className={`setting-input ${validationErrors.aoCuUrl ? 'error' : ''}`}
+                        value={wayfinderSettings.aoCuUrl}
+                        placeholder="https://cu.ardrive.io"
+                        onChange={(e) => updateWayfinderSettings({ aoCuUrl: e.currentTarget.value.trim() })}
+                      />
+                      {validationErrors.aoCuUrl && (
+                        <div className="validation-error">{validationErrors.aoCuUrl}</div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="subsection">

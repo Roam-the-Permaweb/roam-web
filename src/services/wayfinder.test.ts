@@ -52,7 +52,7 @@ describe('Wayfinder Service', () => {
       expect(config.verificationStrategy).toBe('none') // No verification by default
       expect(config.gatewayLimit).toBe(3) // Reduced to minimize network requests
       expect(config.cacheTimeoutMinutes).toBe(5) // Increased cache timeout
-      expect(config.verificationTimeoutMs).toBe(10000) // Updated timeout
+      expect(config.verificationTimeoutMs).toBe(15000) // Updated timeout
     })
 
     it('should update configuration correctly', () => {
@@ -109,7 +109,7 @@ describe('Wayfinder Service', () => {
 
       expect(result.url).toContain('test-tx-id')
       expect(result.gateway).toBeDefined()
-    }, 10000)
+    }, 15000)
 
     it('should fall back to original gateway on Wayfinder error', async () => {
       wayfinderService.updateConfig({ enableWayfinder: true })
@@ -124,7 +124,7 @@ describe('Wayfinder Service', () => {
       // Should get some result (either Wayfinder or fallback)
       expect(result.url).toBeDefined()
       expect(result.gateway).toBeDefined()
-    }, 10000)
+    }, 15000)
   })
 
   describe('Verification Status', () => {

@@ -760,6 +760,13 @@
   transition: all 0.2s ease;
 }
 
+.setting-input[type="url"] {
+  width: 100%;
+  max-width: 300px;
+  text-align: left;
+  min-width: 200px;
+}
+
 .setting-input:focus {
   outline: none;
   border-color: rgba(255, 106, 0, 0.6);

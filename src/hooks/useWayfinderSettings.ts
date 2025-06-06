@@ -13,10 +13,19 @@ interface WayfinderSettings {
   staticGateways: string[]
   cacheTimeoutMinutes: number
   
+  // Routing configuration
+  routingStrategy: 'random' | 'fastest-ping' | 'round-robin' | 'static' | 'preferred-fallback'
+  staticRoutingGateway: string
+  preferredGateway: string
+  routingTimeoutMs: number
+  
   // Verification configuration
   verificationStrategy: 'hash' | 'none'
   trustedGateways: string[]
   verificationTimeoutMs: number
+  
+  // AO Configuration
+  aoCuUrl: string
   
   // Future features
   enableGraphQL: boolean
@@ -45,10 +54,19 @@ export function useWayfinderSettings(): UseWayfinderSettingsResult {
     staticGateways: ['https://vilenarios.com', 'https://permagate.io'],
     cacheTimeoutMinutes: 1,
     
+    // Routing configuration
+    routingStrategy: 'random',
+    staticRoutingGateway: 'https://arweave.net',
+    preferredGateway: 'https://arweave.net',
+    routingTimeoutMs: 500,
+    
     // Verification configuration
     verificationStrategy: 'hash',
     trustedGateways: ['https://permagate.io', 'https://vilenarios.com'],
-    verificationTimeoutMs: 10000,
+    verificationTimeoutMs: 15000,
+    
+    // AO Configuration
+    aoCuUrl: 'https://cu.ardrive.io',
     
     // Future features
     enableGraphQL: false
@@ -59,6 +77,16 @@ export function useWayfinderSettings(): UseWayfinderSettingsResult {
 
   // Validate gateway URL format
   const validateGatewayUrl = (url: string): boolean => {
+    try {
+      const parsedUrl = new URL(url.trim())
+      return parsedUrl.protocol === 'https:' && parsedUrl.hostname.length > 0
+    } catch {
+      return false
+    }
+  }
+  
+  // Validate AO CU URL format
+  const validateAoCuUrl = (url: string): boolean => {
     try {
       const parsedUrl = new URL(url.trim())
       return parsedUrl.protocol === 'https:' && parsedUrl.hostname.length > 0
@@ -98,10 +126,19 @@ export function useWayfinderSettings(): UseWayfinderSettingsResult {
           staticGateways: config.staticGateways,
           cacheTimeoutMinutes: config.cacheTimeoutMinutes,
           
+          // Routing configuration
+          routingStrategy: config.routingStrategy,
+          staticRoutingGateway: config.staticRoutingGateway || 'https://arweave.net',
+          preferredGateway: config.preferredGateway || 'https://arweave.net',
+          routingTimeoutMs: config.routingTimeoutMs || 500,
+          
           // Verification configuration
           verificationStrategy: config.verificationStrategy,
           trustedGateways: config.trustedGateways,
           verificationTimeoutMs: config.verificationTimeoutMs,
+          
+          // AO Configuration
+          aoCuUrl: config.aoCuUrl,
           
           // Future features
           enableGraphQL: false // Not implemented yet
@@ -137,10 +174,31 @@ export function useWayfinderSettings(): UseWayfinderSettingsResult {
       if (error) newErrors.staticGateways = error
     }
     
-    // Validate trusted gateways if verification strategy is hash
+    // Validate trusted gateways if verification strategy requires them
     if (updatedSettings.verificationStrategy === 'hash' && 'trustedGateways' in newSettings) {
       const error = validateGateways(newSettings.trustedGateways!, 'Trusted gateways')
       if (error) newErrors.trustedGateways = error
+    }
+    
+    // Validate AO CU URL if provided
+    if ('aoCuUrl' in newSettings && newSettings.aoCuUrl) {
+      if (!validateAoCuUrl(newSettings.aoCuUrl)) {
+        newErrors.aoCuUrl = 'Invalid AO CU URL. Must use HTTPS.'
+      }
+    }
+    
+    // Validate static routing gateway if routing strategy is static
+    if (updatedSettings.routingStrategy === 'static' && 'staticRoutingGateway' in newSettings) {
+      if (!validateGatewayUrl(newSettings.staticRoutingGateway!)) {
+        newErrors.staticRoutingGateway = 'Invalid static routing gateway URL. Must use HTTPS.'
+      }
+    }
+    
+    // Validate preferred gateway if routing strategy is preferred-fallback
+    if (updatedSettings.routingStrategy === 'preferred-fallback' && 'preferredGateway' in newSettings) {
+      if (!validateGatewayUrl(newSettings.preferredGateway!)) {
+        newErrors.preferredGateway = 'Invalid preferred gateway URL. Must use HTTPS.'
+      }
     }
     
     // Update validation errors
@@ -161,18 +219,18 @@ export function useWayfinderSettings(): UseWayfinderSettingsResult {
       if ('gatewayLimit' in newSettings) serviceConfig.gatewayLimit = newSettings.gatewayLimit
       if ('staticGateways' in newSettings) serviceConfig.staticGateways = newSettings.staticGateways
       if ('cacheTimeoutMinutes' in newSettings) serviceConfig.cacheTimeoutMinutes = newSettings.cacheTimeoutMinutes
+      if ('routingStrategy' in newSettings) serviceConfig.routingStrategy = newSettings.routingStrategy
+      if ('staticRoutingGateway' in newSettings) serviceConfig.staticRoutingGateway = newSettings.staticRoutingGateway
+      if ('preferredGateway' in newSettings) serviceConfig.preferredGateway = newSettings.preferredGateway
+      if ('routingTimeoutMs' in newSettings) serviceConfig.routingTimeoutMs = newSettings.routingTimeoutMs
       if ('verificationStrategy' in newSettings) serviceConfig.verificationStrategy = newSettings.verificationStrategy
       if ('trustedGateways' in newSettings) serviceConfig.trustedGateways = newSettings.trustedGateways
       if ('verificationTimeoutMs' in newSettings) serviceConfig.verificationTimeoutMs = newSettings.verificationTimeoutMs
+      if ('aoCuUrl' in newSettings) serviceConfig.aoCuUrl = newSettings.aoCuUrl
       
       try {
         // Update the wayfinder service
         wayfinderService.updateConfig(serviceConfig)
-        
-        logger.info('Wayfinder settings updated successfully:', {
-          uiSettings: newSettings,
-          serviceEnabled: wayfinderService.getConfig().enableWayfinder
-        })
       } catch (error) {
         logger.error('Failed to update Wayfinder service:', error)
         // Revert settings on service update failure
@@ -191,14 +249,18 @@ export function useWayfinderSettings(): UseWayfinderSettingsResult {
       gatewayLimit: 5,
       staticGateways: ['https://vilenarios.com', 'https://permagate.io'],
       cacheTimeoutMinutes: 1,
+      routingStrategy: 'random',
+      staticRoutingGateway: 'https://arweave.net',
+      preferredGateway: 'https://arweave.net',
+      routingTimeoutMs: 500,
       verificationStrategy: 'hash',
       trustedGateways: ['https://permagate.io', 'https://vilenarios.com'],
-      verificationTimeoutMs: 10000,
+      verificationTimeoutMs: 15000,
+      aoCuUrl: 'https://cu.ardrive.io',
       enableGraphQL: false
     }
     
     updateSettings(defaultSettings)
-    logger.info('Wayfinder settings reset to defaults')
   }
 
   return {

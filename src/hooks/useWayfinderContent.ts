@@ -60,7 +60,6 @@ export function useWayfinderContent(
     // Register event listener BEFORE making the request to avoid race conditions
     const handleVerificationEvent = (event: any) => {
       if (event.txId === txId && !cancelled) {
-        logger.debug(`Verification event received for ${txId}:`, event.type)
         setResult(prev => ({
           ...prev,
           verified: event.type === 'verification-completed',
@@ -114,8 +113,6 @@ export function useWayfinderContent(
 
         // Add verification status polling for missed events
         if (currentVerificationStatus.status === 'verifying' || currentVerificationStatus.status === 'pending') {
-          logger.debug(`Setting up verification status polling for ${txId} (status: ${currentVerificationStatus.status})`)
-          
           let pollCount = 0
           const maxPolls = 10 // Poll up to 10 times
           
@@ -132,7 +129,6 @@ export function useWayfinderContent(
             setResult(prev => {
               if (latestStatus.status !== prev.verificationStatus.status || 
                   (latestStatus.status === 'verified' && !prev.verified)) {
-                logger.debug(`Polling detected status change for ${txId}: ${prev.verificationStatus.status} -> ${latestStatus.status}`)
                 return {
                   ...prev,
                   verified: latestStatus.status === 'verified',
@@ -146,7 +142,6 @@ export function useWayfinderContent(
             if (latestStatus.status === 'verified' || 
                 latestStatus.status === 'failed' || 
                 pollCount >= maxPolls) {
-              logger.debug(`Stopping verification polling for ${txId} (status: ${latestStatus.status}, polls: ${pollCount})`)
               clearInterval(pollInterval)
               pollInterval = null
             }
