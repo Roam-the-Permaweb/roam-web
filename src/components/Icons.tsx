@@ -24,7 +24,14 @@ import {
   Users,
   Menu,
   Info,
-  Calendar
+  Calendar,
+  BarChart,
+  Heart,
+  Layers,
+  CheckCircle,
+  AlertTriangle,
+  Settings,
+  RotateCcw
 } from 'lucide-preact'
 
 interface IconProps {
@@ -86,7 +93,23 @@ export const Icons = {
   Info: (props: IconProps) => <Info size={16} {...props} />,
   
   // Date picker
-  Calendar: (props: IconProps) => <Calendar size={20} {...props} />
+  Calendar: (props: IconProps) => <Calendar size={20} {...props} />,
+  
+  // Statistics
+  BarChart: (props: IconProps) => <BarChart size={20} {...props} />,
+  Heart: (props: IconProps) => <Heart size={20} {...props} />,
+  Layers: (props: IconProps) => <Layers size={20} {...props} />,
+  
+  // Alias X for close
+  X: (props: IconProps) => <X size={20} {...props} />,
+  
+  // Verification icons
+  CheckCircle: (props: IconProps) => <CheckCircle size={12} {...props} />,
+  AlertTriangle: (props: IconProps) => <AlertTriangle size={12} {...props} />,
+  
+  // Advanced settings icons
+  Settings: (props: IconProps) => <Settings size={16} {...props} />,
+  RotateCcw: (props: IconProps) => <RotateCcw size={16} {...props} />
 }
 
 // Helper function to get media type icon

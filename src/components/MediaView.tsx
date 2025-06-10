@@ -26,7 +26,9 @@
  */
 import { useState, useEffect, useRef } from 'preact/hooks';
 import '../styles/media-view.css';
+import '../styles/verification-indicator.css';
 import { GATEWAY_DATA_SOURCE } from '../engine/fetchQueue';
+import { useWayfinderContent } from '../hooks/useWayfinderContent';
 import type { TxMeta } from '../constants';
 import { 
   IMAGE_LOAD_THRESHOLD, 
@@ -65,12 +67,27 @@ export const MediaView = ({
   const { id, tags } = txMeta;
 
   const arfsMeta = txMeta.arfsMeta;
-  const contentType =
+  /*const contentType =
     arfsMeta?.contentType ||     // fallback if old style
-    tags.find(t => t.name === 'Content-Type')?.value || '';
+    tags.find(t => t.name === 'Content-Type')?.value || ''; */
   const size = arfsMeta?.size ?? txMeta.data.size;
   const dataTxId = arfsMeta?.dataTxId || id;
-  const directUrl = `${GATEWAY_DATA_SOURCE[0]}/${dataTxId}`;
+  
+  // Determine content type once with proper fallback chain
+  const baseContentType = arfsMeta?.contentType || 
+                          tags.find(t => t.name === 'Content-Type')?.value || 
+                          '';
+
+  // State for forcing content to load even if it exceeds size thresholds
+  const [forceLoad, setForceLoad] = useState(false);
+  
+  // Use Wayfinder for content URL with size-aware loading
+  const wayfinderResult = useWayfinderContent(dataTxId, undefined, forceLoad, baseContentType, size);
+  
+  // Final content type: prefer Wayfinder's detected type, fallback to base
+  const contentType = wayfinderResult.contentType || baseContentType;
+  
+  const directUrl = wayfinderResult.url || `${GATEWAY_DATA_SOURCE[0]}/${dataTxId}`;
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -80,19 +97,20 @@ export const MediaView = ({
     'application/xhtml+xml',
     'application/x.arweave-manifest+json'
   ];
-  const isWide = wideContentTypes.includes(contentType);
+  const isWide = contentType && wideContentTypes.includes(contentType);
   
   // Determine content type for height styling
-  const getContentTypeClass = () => {
-    if (contentType.startsWith('image/')) return 'content-image';
-    if (contentType === 'application/pdf') return 'content-pdf';
-    if (['text/plain', 'text/markdown'].includes(contentType)) return 'content-text';
-    if (contentType.startsWith('text/html') || 
-        contentType === 'application/xhtml+xml' || 
-        contentType.startsWith('application/x.arweave-manifest') || 
-        contentType.startsWith('application/json')) return 'content-website';
-    if (contentType.startsWith('audio/')) return 'content-audio';
-    return '';
+  const getContentTypeClass = () => { if (contentType) {
+      if (contentType.startsWith('image/')) return 'content-image';
+      if (contentType === 'application/pdf') return 'content-pdf';
+      if (['text/plain', 'text/markdown'].includes(contentType)) return 'content-text';
+      if (contentType.startsWith('text/html') || 
+          contentType === 'application/xhtml+xml' || 
+          contentType.startsWith('application/x.arweave-manifest') || 
+          contentType.startsWith('application/json')) return 'content-website';
+      if (contentType.startsWith('audio/')) return 'content-audio';
+      return '';
+    }
   };
 
   const [manualLoad, setManualLoad] = useState(contentType.startsWith('image/') && size > IMAGE_LOAD_THRESHOLD);
@@ -104,6 +122,7 @@ export const MediaView = ({
   const [errorText, setErrorText] = useState<string | null>(null);
   const [fadeIn, setFadeIn] = useState(false);
   const [actionsExpanded, setActionsExpanded] = useState(false);
+  const [objectUrl, setObjectUrl] = useState<string | null>(null);
 
   // Reset flags when tx changes
 useEffect(() => {
@@ -116,6 +135,7 @@ useEffect(() => {
   setManualLoadVideo(isVideo && size > VIDEO_LOAD_THRESHOLD);
   setManualLoadAudio(isAudio && size > AUDIO_LOAD_THRESHOLD);
   setManualLoadText(isText && size > TEXT_LOAD_THRESHOLD);
+  setForceLoad(false);
 
   setTextContent(null);
   setLoadingText(false);
@@ -130,23 +150,43 @@ useEffect(() => {
   return () => clearTimeout(timer);
 }, [id, contentType, size]);
 
-  // Fetch plaintext
+  // Handle Wayfinder content data and Object URL lifecycle
   useEffect(() => {
-    let canceled = false;
-    if (!['text/plain', 'text/markdown'].includes(contentType) || manualLoadText) return;
+    // Clean up previous Object URL
+    if (objectUrl) {
+      URL.revokeObjectURL(objectUrl);
+      setObjectUrl(null);
+    }
 
-    setLoadingText(true);
-    fetch(directUrl)
-      .then(res => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.text();
-      })
-      .then(text => { if (!canceled) setTextContent(text); })
-      .catch(() => { if (!canceled) setErrorText('Failed to load text'); })
-      .finally(() => { if (!canceled) setLoadingText(false); });
+    // Create Object URL for Wayfinder data if available
+    if (wayfinderResult.data) {
+      const newObjectUrl = URL.createObjectURL(wayfinderResult.data);
+      setObjectUrl(newObjectUrl);
+      
+      // For text content, extract text from Blob automatically (no double-fetching)
+      if ((contentType.startsWith('text/') && !contentType.startsWith('text/html') && !contentType.startsWith('text/xml')) ||
+          ['text/plain', 'text/markdown'].includes(contentType)) {
+        if (!manualLoadText && !textContent && !loadingText) {
+          setLoadingText(true);
+          wayfinderResult.data.text()
+            .then(text => {
+              setTextContent(text);
+              setErrorText(null);
+            })
+            .catch(() => setErrorText('Failed to extract text from verified content'))
+            .finally(() => setLoadingText(false));
+        }
+      }
+    }
 
-    return () => { canceled = true };
-  }, [directUrl, contentType]);
+    // Cleanup function - ensure no memory leaks
+    return () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+        setObjectUrl(null);
+      }
+    };
+  }, [wayfinderResult.data, wayfinderResult.loading, contentType, manualLoadText, txMeta.id]);
 
   // Iframe fallback detection for manifests and HTML
   useEffect(() => {
@@ -165,7 +205,7 @@ useEffect(() => {
   const renderMedia = () => {
     if (contentType.startsWith('image/') && manualLoad) {
       return (
-        <button className="media-load-btn" onClick={() => setManualLoad(false)} aria-label={`Load image, ${(size / 1024 / 1024).toFixed(2)} MB`}>
+        <button className="media-load-btn" onClick={() => { setManualLoad(false); setForceLoad(true); }} aria-label={`Load image, ${(size / 1024 / 1024).toFixed(2)} MB`}>
           Tap to load image ({(size / 1024 / 1024).toFixed(2)} MB)
         </button>
       );
@@ -174,13 +214,13 @@ useEffect(() => {
       return (
         <img
           className="media-image"
-          src={manualLoad ? undefined : directUrl}
+          src={manualLoad ? undefined : objectUrl || directUrl}
           alt="Roam content"
-          onClick={() => onZoom?.(directUrl)}
+          onClick={() => onZoom?.(objectUrl || directUrl)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
-              onZoom?.(directUrl);
+              onZoom?.(objectUrl || directUrl);
             }
           }}
           role="button"
@@ -192,7 +232,7 @@ useEffect(() => {
 
     if (contentType.startsWith('video/') && manualLoadVideo) {
       return (
-        <button className="media-load-btn" onClick={() => setManualLoadVideo(false)} aria-label={`Load video, ${(size / 1024 / 1024).toFixed(2)} MB`}>
+        <button className="media-load-btn" onClick={() => { setManualLoadVideo(false); setForceLoad(true); }} aria-label={`Load video, ${(size / 1024 / 1024).toFixed(2)} MB`}>
           Tap to load video ({(size / 1024 / 1024).toFixed(2)} MB)
         </button>
       );
@@ -201,7 +241,7 @@ useEffect(() => {
       return (
         <video
           className="media-element media-video"
-          src={manualLoadVideo ? undefined : directUrl}
+          src={manualLoadVideo ? undefined : objectUrl || directUrl}
           controls
           preload="metadata"
           onError={() => onCorrupt?.(txMeta)}
@@ -211,7 +251,7 @@ useEffect(() => {
 
     if (contentType.startsWith('audio/') && manualLoadAudio) {
       return (
-        <button className="media-load-btn" onClick={() => setManualLoadAudio(false)} aria-label={`Load audio, ${(size / 1024 / 1024).toFixed(2)} MB`}>
+        <button className="media-load-btn" onClick={() => { setManualLoadAudio(false); setForceLoad(true); }} aria-label={`Load audio, ${(size / 1024 / 1024).toFixed(2)} MB`}>
           Tap to load audio ({(size / 1024 / 1024).toFixed(2)} MB)
         </button>
       );
@@ -233,7 +273,7 @@ useEffect(() => {
           </div>
           <audio
             className="media-element media-audio"
-            src={manualLoadAudio ? undefined : directUrl}
+            src={manualLoadAudio ? undefined : objectUrl || directUrl}
             controls
             preload="metadata"
             onError={() => onCorrupt?.(txMeta)}
@@ -242,28 +282,16 @@ useEffect(() => {
       );
     }
 
-    if (['text/plain', 'text/markdown'].includes(contentType)) {
-      if (manualLoadText) {
-        return (
-          <button className="media-load-btn" onClick={() => setManualLoadText(false)} aria-label={`Load text, ${(size / 1024 / 1024).toFixed(2)} MB`}>
-            Tap to load text ({(size / 1024 / 1024).toFixed(2)} MB)
-          </button>
-        );
-      }
-
-      if (loadingText) return <div className="media-loading">Loading…</div>;
-      if (errorText) return <div className="media-error">{errorText}</div>;
-      return (
-        <div className="media-element text-container">
-          <pre className="media-text">{textContent}</pre>
-        </div>
-      );
-    }
 
     if (contentType === 'application/pdf') {
       return (
         <div className="media-embed-wrapper">
-          <iframe ref={iframeRef} className="media-pdf" src={directUrl} title="PDF Viewer" />
+          <iframe 
+            ref={iframeRef} 
+            className="media-pdf" 
+            src={objectUrl || directUrl}
+            title="PDF Viewer" 
+          />
         </div>
       );
     }
@@ -272,14 +300,16 @@ useEffect(() => {
       contentType.startsWith('text/html') ||
       contentType === 'application/xhtml+xml' ||
       contentType.startsWith('application/x.arweave-manifest') || 
-      contentType.startsWith('application/json')
+      contentType.startsWith('application/json') ||
+      contentType.startsWith('text/xml') ||
+      contentType.startsWith('application/xml')
     ) {
       return (
         <div className="media-embed-wrapper">
           <iframe
             ref={iframeRef}
             className="media-iframe"
-            src={directUrl}
+            src={objectUrl || directUrl}
             sandbox="allow-scripts allow-same-origin"
             title="Permaweb content preview"
           />
@@ -287,13 +317,106 @@ useEffect(() => {
       );
     }
 
-    return <div className="media-error">Unsupported media type: {contentType}</div>;
+    // Handle all text types (including markdown) that should display as text
+    if ((contentType.startsWith('text/') && !contentType.startsWith('text/html') && !contentType.startsWith('text/xml')) ||
+        ['text/plain', 'text/markdown'].includes(contentType)) {
+      if (manualLoadText) {
+        return (
+          <button className="media-load-btn" onClick={() => { setManualLoadText(false); setForceLoad(true); }} aria-label={`Load text, ${(size / 1024 / 1024).toFixed(2)} MB`}>
+            Tap to load text ({(size / 1024 / 1024).toFixed(2)} MB)
+          </button>
+        );
+      }
+
+      if (loadingText) return <div className="media-loading">Loading…</div>;
+      if (errorText) return <div className="media-error">{errorText}</div>;
+      
+      if (!textContent && wayfinderResult.data && !loadingText) {
+        return (
+          <button 
+            className="media-load-btn" 
+            onClick={async () => {
+              setLoadingText(true);
+              try {
+                const text = await wayfinderResult.data!.text();
+                setTextContent(text);
+                setErrorText(null);
+              } catch (error) {
+                setErrorText('Failed to read text content');
+              } finally {
+                setLoadingText(false);
+              }
+            }}
+          >
+            Load text content
+          </button>
+        );
+      }
+      
+      return (
+        <div className="media-element text-container">
+          <pre className="media-text">{textContent}</pre>
+        </div>
+      );
+    }
+
+    // Handle empty/unknown content types with fallback display
+    if (!contentType || contentType.trim() === '') {
+      return (
+        <div className="media-element text-container">
+          <div className="media-info">
+            <p>Content type unknown - attempting to display as text</p>
+            {textContent ? (
+              <pre className="media-text">{textContent}</pre>
+            ) : wayfinderResult.data ? (
+              <button 
+                className="media-load-btn" 
+                onClick={async () => {
+                  try {
+                    const text = await wayfinderResult.data!.text();
+                    setTextContent(text);
+                  } catch (error) {
+                    setErrorText('Failed to read content as text');
+                  }
+                }}
+              >
+                Try loading as text
+              </button>
+            ) : (
+              <div className="media-error">No content data available</div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // Show detailed error for debugging unsupported types
+    const debugInfo = {
+      wayfinderContentType: wayfinderResult.contentType,
+      arfsContentType: arfsMeta?.contentType,
+      tagContentType: tags.find(t => t.name === 'Content-Type')?.value,
+      finalContentType: contentType,
+      wayfinderEnabled: wayfinderResult.isWayfinderEnabled,
+      wayfinderLoading: wayfinderResult.loading,
+      wayfinderError: wayfinderResult.error
+    };
+    
+    return (
+      <div className="media-error">
+        <div>Unsupported media type: "{contentType}"</div>
+        <details style={{marginTop: '10px', fontSize: '12px', opacity: '0.7'}}>
+          <summary>Debug Info</summary>
+          <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
+        </details>
+      </div>
+    );
   };
 
-  // Remove skeleton loader - just show content directly
-
   return (
-    <div className={`media-view-container ${fadeIn ? 'content-fade-in' : ''}`}>
+    <div 
+      key={txMeta.id} 
+      className={`media-view-container ${fadeIn ? 'content-fade-in' : ''}`}
+    >
       <div className="media-toolbar">
         <button
           className="privacy-toggle-btn"
@@ -303,11 +426,22 @@ useEffect(() => {
         >
           {privacyOn ? <Icons.Eye /> : <Icons.EyeOff />}
         </button>
+        
       </div>
 
       <div className={`media-wrapper ${isWide ? 'wide' : ''} ${getContentTypeClass()}`}>
         {renderMedia()}
         {privacyOn && <div className="privacy-screen" />}
+        
+        {/* Subtle loading indicator for Wayfinder - only show when actually verifying */}
+        {wayfinderResult.loading && wayfinderResult.verificationStatus.status === 'verifying' && (
+          <div className="wayfinder-loading-overlay">
+            <div className="wayfinder-loading-indicator">
+              <Icons.Loading size={16} />
+              <span>Verifying content...</span>
+            </div>
+          </div>
+        )}
         
         {/* Collapsible media actions */}
         <div className="media-actions-float">

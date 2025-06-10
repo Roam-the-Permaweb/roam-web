@@ -15,6 +15,8 @@ export default defineConfig({
         clientsClaim: true,
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [/^\/api\//, /\.(?:js|css|png|jpg|jpeg|svg|gif|webp|avif|ico|woff|woff2)$/],
+        // Increase file size limit to accommodate AR.IO SDK bundle
+        maximumFileSizeToCacheInBytes: 10 * 1024 * 1024, // 10 MB
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/arweave\.net\//,
@@ -46,6 +48,8 @@ export default defineConfig({
     }),
   ],
   build: {
+    // Increase chunk size warning limit for AR.IO SDK
+    chunkSizeWarningLimit: 8000, // 8MB
     rollupOptions: {
       output: {
         // Enable content-based hashing for cache busting
