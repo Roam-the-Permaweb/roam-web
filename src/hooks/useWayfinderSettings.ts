@@ -24,9 +24,6 @@ interface WayfinderSettings {
   trustedGateways: string[]
   verificationTimeoutMs: number
   
-  // AO Configuration
-  aoCuUrl: string
-  
   // Future features
   enableGraphQL: boolean
 }
@@ -61,12 +58,9 @@ export function useWayfinderSettings(): UseWayfinderSettingsResult {
     routingTimeoutMs: 500,
     
     // Verification configuration
-    verificationStrategy: 'hash',
+    verificationStrategy: 'hash', // Re-enabled with wayfinder-core 0.0.3-alpha.1
     trustedGateways: ['https://permagate.io', 'https://vilenarios.com'],
     verificationTimeoutMs: 20000,
-    
-    // AO Configuration
-    aoCuUrl: 'https://cu.ardrive.io',
     
     // Future features
     enableGraphQL: false
@@ -85,15 +79,6 @@ export function useWayfinderSettings(): UseWayfinderSettingsResult {
     }
   }
   
-  // Validate AO CU URL format
-  const validateAoCuUrl = (url: string): boolean => {
-    try {
-      const parsedUrl = new URL(url.trim())
-      return parsedUrl.protocol === 'https:' && parsedUrl.hostname.length > 0
-    } catch {
-      return false
-    }
-  }
 
   // Validate gateway array
   const validateGateways = (gateways: string[], fieldName: string): string | null => {
@@ -137,9 +122,6 @@ export function useWayfinderSettings(): UseWayfinderSettingsResult {
           trustedGateways: config.trustedGateways,
           verificationTimeoutMs: config.verificationTimeoutMs,
           
-          // AO Configuration
-          aoCuUrl: config.aoCuUrl,
-          
           // Future features
           enableGraphQL: false // Not implemented yet
         })
@@ -180,12 +162,6 @@ export function useWayfinderSettings(): UseWayfinderSettingsResult {
       if (error) newErrors.trustedGateways = error
     }
     
-    // Validate AO CU URL if provided
-    if ('aoCuUrl' in newSettings && newSettings.aoCuUrl) {
-      if (!validateAoCuUrl(newSettings.aoCuUrl)) {
-        newErrors.aoCuUrl = 'Invalid AO CU URL. Must use HTTPS.'
-      }
-    }
     
     // Validate static routing gateway if routing strategy is static
     if (updatedSettings.routingStrategy === 'static' && 'staticRoutingGateway' in newSettings) {
@@ -226,7 +202,6 @@ export function useWayfinderSettings(): UseWayfinderSettingsResult {
       if ('verificationStrategy' in newSettings) serviceConfig.verificationStrategy = newSettings.verificationStrategy
       if ('trustedGateways' in newSettings) serviceConfig.trustedGateways = newSettings.trustedGateways
       if ('verificationTimeoutMs' in newSettings) serviceConfig.verificationTimeoutMs = newSettings.verificationTimeoutMs
-      if ('aoCuUrl' in newSettings) serviceConfig.aoCuUrl = newSettings.aoCuUrl
       
       try {
         // Update the wayfinder service
@@ -253,10 +228,9 @@ export function useWayfinderSettings(): UseWayfinderSettingsResult {
       staticRoutingGateway: 'https://arweave.net',
       preferredGateway: 'https://arweave.net',
       routingTimeoutMs: 500,
-      verificationStrategy: 'hash',
+      verificationStrategy: 'hash', // Re-enabled with wayfinder-core 0.0.3-alpha.1
       trustedGateways: ['https://permagate.io', 'https://vilenarios.com'],
       verificationTimeoutMs: 20000,
-      aoCuUrl: 'https://cu.ardrive.io',
       enableGraphQL: false
     }
     

@@ -111,41 +111,22 @@ export function useWayfinderContent(
           contentType: response.contentType
         }))
 
-        // Add verification status polling for missed events
+        // Hybrid approach: Single fallback check after 5 seconds for missed events
         if (currentVerificationStatus.status === 'verifying' || currentVerificationStatus.status === 'pending') {
-          let pollCount = 0
-          const maxPolls = 10 // Poll up to 10 times
-          
-          pollInterval = setInterval(() => {
-            if (cancelled) {
-              clearInterval(pollInterval)
-              return
-            }
+          pollInterval = setTimeout(() => {
+            if (cancelled) return
             
-            pollCount++
             const latestStatus = wayfinderService.getVerificationStatus(txId)
             
-            // Update if status changed
-            setResult(prev => {
-              if (latestStatus.status !== prev.verificationStatus.status || 
-                  (latestStatus.status === 'verified' && !prev.verified)) {
-                return {
-                  ...prev,
-                  verified: latestStatus.status === 'verified',
-                  verificationStatus: latestStatus
-                }
-              }
-              return prev
-            })
-            
-            // Stop polling if verified, failed, or max polls reached
-            if (latestStatus.status === 'verified' || 
-                latestStatus.status === 'failed' || 
-                pollCount >= maxPolls) {
-              clearInterval(pollInterval)
-              pollInterval = null
+            // Update only if status changed from verifying/pending
+            if (latestStatus.status !== 'verifying' && latestStatus.status !== 'pending') {
+              setResult(prev => ({
+                ...prev,
+                verified: latestStatus.status === 'verified',
+                verificationStatus: latestStatus
+              }))
             }
-          }, 1000) // Poll every second
+          }, 5000) // Single check after 5 seconds
         }
 
       } catch (error) {
@@ -174,7 +155,7 @@ export function useWayfinderContent(
       cancelled = true
       wayfinderService.removeEventListener(handleVerificationEvent)
       if (pollInterval) {
-        clearInterval(pollInterval)
+        clearTimeout(pollInterval)
         pollInterval = null
       }
     }

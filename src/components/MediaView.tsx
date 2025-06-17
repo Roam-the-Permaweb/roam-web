@@ -123,6 +123,7 @@ export const MediaView = ({
   const [fadeIn, setFadeIn] = useState(false);
   const [actionsExpanded, setActionsExpanded] = useState(false);
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const textExtractionRef = useRef<{ txId: string; promise: Promise<string> | null }>({ txId: '', promise: null });
 
   // Reset flags when tx changes
 useEffect(() => {
@@ -141,6 +142,9 @@ useEffect(() => {
   setLoadingText(false);
   setErrorText(null);
   setFadeIn(false);
+  
+  // Reset text extraction cache when transaction changes
+  textExtractionRef.current = { txId: '', promise: null };
   
   // Trigger fade in after a short delay for smooth transition
   const timer = setTimeout(() => {
@@ -163,18 +167,35 @@ useEffect(() => {
       const newObjectUrl = URL.createObjectURL(wayfinderResult.data);
       setObjectUrl(newObjectUrl);
       
-      // For text content, extract text from Blob automatically (no double-fetching)
+      // For text content, extract text from Blob automatically with memoization
       if ((contentType.startsWith('text/') && !contentType.startsWith('text/html') && !contentType.startsWith('text/xml')) ||
           ['text/plain', 'text/markdown'].includes(contentType)) {
         if (!manualLoadText && !textContent && !loadingText) {
-          setLoadingText(true);
-          wayfinderResult.data.text()
-            .then(text => {
-              setTextContent(text);
-              setErrorText(null);
-            })
-            .catch(() => setErrorText('Failed to extract text from verified content'))
-            .finally(() => setLoadingText(false));
+          // Check if we already have a text extraction in progress for this transaction
+          if (textExtractionRef.current.txId === txMeta.id && textExtractionRef.current.promise) {
+            // Reuse existing extraction promise
+            setLoadingText(true);
+            textExtractionRef.current.promise
+              .then(text => {
+                setTextContent(text);
+                setErrorText(null);
+              })
+              .catch(() => setErrorText('Failed to extract text from verified content'))
+              .finally(() => setLoadingText(false));
+          } else {
+            // Create new extraction promise and cache it
+            setLoadingText(true);
+            const extractionPromise = wayfinderResult.data.text();
+            textExtractionRef.current = { txId: txMeta.id, promise: extractionPromise };
+            
+            extractionPromise
+              .then(text => {
+                setTextContent(text);
+                setErrorText(null);
+              })
+              .catch(() => setErrorText('Failed to extract text from verified content'))
+              .finally(() => setLoadingText(false));
+          }
         }
       }
     }
@@ -336,15 +357,32 @@ useEffect(() => {
           <button 
             className="media-load-btn" 
             onClick={async () => {
-              setLoadingText(true);
-              try {
-                const text = await wayfinderResult.data!.text();
-                setTextContent(text);
-                setErrorText(null);
-              } catch (error) {
-                setErrorText('Failed to read text content');
-              } finally {
-                setLoadingText(false);
+              // Check if we already have cached text extraction for this transaction
+              if (textExtractionRef.current.txId === txMeta.id && textExtractionRef.current.promise) {
+                setLoadingText(true);
+                try {
+                  const text = await textExtractionRef.current.promise;
+                  setTextContent(text);
+                  setErrorText(null);
+                } catch (error) {
+                  setErrorText('Failed to read text content');
+                } finally {
+                  setLoadingText(false);
+                }
+              } else {
+                // Create new extraction promise and cache it
+                setLoadingText(true);
+                try {
+                  const extractionPromise = wayfinderResult.data!.text();
+                  textExtractionRef.current = { txId: txMeta.id, promise: extractionPromise };
+                  const text = await extractionPromise;
+                  setTextContent(text);
+                  setErrorText(null);
+                } catch (error) {
+                  setErrorText('Failed to read text content');
+                } finally {
+                  setLoadingText(false);
+                }
               }
             }}
           >
@@ -372,11 +410,23 @@ useEffect(() => {
               <button 
                 className="media-load-btn" 
                 onClick={async () => {
-                  try {
-                    const text = await wayfinderResult.data!.text();
-                    setTextContent(text);
-                  } catch (error) {
-                    setErrorText('Failed to read content as text');
+                  // Use cached extraction if available
+                  if (textExtractionRef.current.txId === txMeta.id && textExtractionRef.current.promise) {
+                    try {
+                      const text = await textExtractionRef.current.promise;
+                      setTextContent(text);
+                    } catch (error) {
+                      setErrorText('Failed to read content as text');
+                    }
+                  } else {
+                    try {
+                      const extractionPromise = wayfinderResult.data!.text();
+                      textExtractionRef.current = { txId: txMeta.id, promise: extractionPromise };
+                      const text = await extractionPromise;
+                      setTextContent(text);
+                    } catch (error) {
+                      setErrorText('Failed to read content as text');
+                    }
                   }
                 }}
               >

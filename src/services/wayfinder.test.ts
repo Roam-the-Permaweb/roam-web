@@ -3,6 +3,38 @@ import { WayfinderService } from './wayfinder'
 
 // Mock the AR.IO SDK
 vi.mock('@ar.io/sdk', () => ({
+  ARIO: {
+    mainnet: vi.fn().mockReturnValue({
+      getGateways: vi.fn().mockResolvedValue({
+        items: [
+          {
+            gatewayAddress: 'mock-gateway-1.com',
+            operatorStake: 1000000,
+            status: 'joined',
+            settings: {
+              protocol: 'https',
+              port: 443,
+              fqdn: 'mock-gateway-1.com'
+            }
+          },
+          {
+            gatewayAddress: 'mock-gateway-2.com',
+            operatorStake: 500000,
+            status: 'joined',
+            settings: {
+              protocol: 'https',
+              port: 443,
+              fqdn: 'mock-gateway-2.com'
+            }
+          }
+        ]
+      })
+    })
+  }
+}))
+
+// Mock the AR.IO Wayfinder Core SDK
+vi.mock('@ar.io/wayfinder-core', () => ({
   Wayfinder: vi.fn().mockImplementation(() => ({
     request: vi.fn().mockResolvedValue({
       url: 'https://mock-gateway.arweave.net/test-tx-id',
@@ -15,9 +47,6 @@ vi.mock('@ar.io/sdk', () => ({
       on: vi.fn()
     }
   })),
-  ARIO: {
-    mainnet: vi.fn().mockReturnValue({})
-  },
   NetworkGatewaysProvider: vi.fn(),
   SimpleCacheGatewaysProvider: vi.fn().mockImplementation(() => ({})),
   StaticGatewaysProvider: vi.fn().mockImplementation(() => ({})),
@@ -49,8 +78,8 @@ describe('Wayfinder Service', () => {
       const config = wayfinderService.getConfig()
       
       expect(config.enableWayfinder).toBe(false) // Disabled by default
-      expect(config.verificationStrategy).toBe('none') // No verification by default
-      expect(config.gatewayLimit).toBe(3) // Reduced to minimize network requests
+      expect(config.verificationStrategy).toBe('hash') // Re-enabled with wayfinder-core 0.0.3-alpha.1
+      expect(config.gatewayLimit).toBe(5) // Top 5 staked gateways for better reliability
       expect(config.cacheTimeoutMinutes).toBe(5) // Increased cache timeout
       expect(config.verificationTimeoutMs).toBe(20000) // Updated timeout
     })

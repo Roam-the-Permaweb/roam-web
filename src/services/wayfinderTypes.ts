@@ -24,14 +24,12 @@ export interface WayfinderConfig {
   staticRoutingGateway?: string  // Gateway URL for static routing strategy
   preferredGateway?: string      // Preferred gateway for preferred-fallback strategy
   routingTimeoutMs?: number      // Timeout for ping-based routing strategies
+  probePath?: string             // Path for ping-based routing (default: '/ar-io/info')
   
   // Verification configuration
   verificationStrategy: 'hash' | 'none'
   trustedGateways: string[]      // Gateways used for verification hash comparison
   verificationTimeoutMs: number  // Timeout for verification process
-  
-  // AO Configuration
-  aoCuUrl: string                // AO Compute Unit URL for AR.IO SDK
   
   // Fallback configuration
   fallbackGateways: string[]     // Direct gateways when Wayfinder unavailable

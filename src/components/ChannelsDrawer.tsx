@@ -451,29 +451,6 @@ export function ChannelsDrawer({
                 </div>
 
                 <div className="subsection">
-                  <h3 className="subsection-title">AO Configuration</h3>
-                  
-                  <div className="setting-row">
-                    <div className="setting-info">
-                      <span className="setting-label">AO Compute Unit URL</span>
-                      <span className="setting-description">Custom AO CU for AR.IO network operations</span>
-                    </div>
-                    <div>
-                      <input 
-                        type="url"
-                        className={`setting-input ${validationErrors.aoCuUrl ? 'error' : ''}`}
-                        value={wayfinderSettings.aoCuUrl}
-                        placeholder="https://cu.ardrive.io"
-                        onChange={(e) => updateWayfinderSettings({ aoCuUrl: e.currentTarget.value.trim() })}
-                      />
-                      {validationErrors.aoCuUrl && (
-                        <div className="validation-error">{validationErrors.aoCuUrl}</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="subsection">
                   <h3 className="subsection-title">Future Features</h3>
                   
                   <div className="setting-row">

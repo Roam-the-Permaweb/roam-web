@@ -4,17 +4,12 @@ import {
   NetworkGatewaysProvider,
   StaticGatewaysProvider,
   HashVerificationStrategy,
-  TrustedGatewaysHashProvider,
   RandomRoutingStrategy,
   StaticRoutingStrategy,
   FastestPingRoutingStrategy,
-  RoundRobinRoutingStrategy,
-  PreferredWithFallbackRoutingStrategy,
-  ARIO,
-  AOProcess,
-  ARIO_MAINNET_PROCESS_ID
-} from '@ar.io/sdk/web'
-import { connect } from '@permaweb/aoconnect'
+  RoundRobinRoutingStrategy
+} from '@ar.io/wayfinder-core'
+import { ARIO } from '@ar.io/sdk'
 import { logger } from '../utils/logger'
 import { GATEWAY_DATA_SOURCE } from '../engine/fetchQueue'
 import type { 
@@ -82,7 +77,7 @@ const DEFAULT_CONFIG: WayfinderConfig = {
   
   // Gateway provider configuration
   gatewayProvider: 'network',
-  gatewayLimit: 3, // Reduced from 5 to minimize network requests
+  gatewayLimit: 5, // Top 5 staked gateways for better reliability
   staticGateways: ['https://arweave.net', 'https://permagate.io'],
   cacheTimeoutMinutes: 5, // Increased cache timeout to reduce requests
   
@@ -91,17 +86,83 @@ const DEFAULT_CONFIG: WayfinderConfig = {
   staticRoutingGateway: 'https://arweave.net',
   preferredGateway: 'https://arweave.net',
   routingTimeoutMs: 500,  // 500ms timeout for ping-based strategies
+  probePath: '/ar-io/info',  // Default probe path for ping-based routing
   
   // Verification configuration  
-  verificationStrategy: 'hash',  // Changed to hash-based verification by default
-  trustedGateways: ['https://permagate.io', 'https://vilenarios.com'],
+  verificationStrategy: 'hash',  // Re-enabled with wayfinder-core 0.0.3-alpha.1
+  // Default trusted gateways - will be replaced with top 5 staked gateways on init
+  trustedGateways: [
+    'https://arweave.net',
+    'https://permagate.io', 
+    'https://vilenarios.com',
+    'https://arweave-search.goldsky.com',
+    'https://g8way.io'
+  ],
   verificationTimeoutMs: 20000,
-  
-  // AO Configuration
-  aoCuUrl: 'https://cu.ardrive.io',  // Default AO Compute Unit URL
   
   // Fallback configuration - uses hostname-based detection
   fallbackGateways: [determineFallbackGateway()]
+}
+
+/**
+ * Custom routing strategy that avoids repeating the same gateway consecutively
+ */
+class AvoidRepeatRandomRoutingStrategy {
+  private lastSelectedGateway: string | null = null
+  private baseStrategy = new RandomRoutingStrategy()
+
+  async selectGateway(options: { gateways: URL[], path?: string, subdomain?: string }): Promise<URL> {
+    const { gateways } = options
+    
+    if (gateways.length <= 1) {
+      // If only one gateway, use it
+      const selected = await this.baseStrategy.selectGateway(options)
+      this.lastSelectedGateway = selected.toString()
+      return selected
+    }
+
+    // Filter out the last selected gateway if possible
+    const availableGateways = this.lastSelectedGateway 
+      ? gateways.filter(g => g.toString() !== this.lastSelectedGateway)
+      : gateways
+
+    // If filtering left us with no gateways, use all gateways
+    const gatewaysToChooseFrom = availableGateways.length > 0 ? availableGateways : gateways
+
+    // Select randomly from the filtered list
+    const selected = await this.baseStrategy.selectGateway({ ...options, gateways: gatewaysToChooseFrom })
+    this.lastSelectedGateway = selected.toString()
+    return selected
+  }
+}
+
+/**
+ * Custom preferred-fallback routing strategy
+ */
+class PreferredFallbackRoutingStrategy {
+  private preferredGateway: string
+  private fallbackStrategy = new AvoidRepeatRandomRoutingStrategy()
+
+  constructor(preferredGateway: string) {
+    this.preferredGateway = preferredGateway
+  }
+
+  async selectGateway(options: { gateways: URL[], path?: string, subdomain?: string }): Promise<URL> {
+    const { gateways } = options
+    
+    // Try to find the preferred gateway in the available list
+    const preferred = gateways.find(g => g.toString() === this.preferredGateway || 
+                                         g.toString() === this.preferredGateway + '/' ||
+                                         g.host === new URL(this.preferredGateway).host)
+    
+    if (preferred) {
+      return preferred
+    }
+
+    // If preferred gateway not available, fall back to random selection
+    logger.info(`Preferred gateway ${this.preferredGateway} not available, falling back to random selection`)
+    return this.fallbackStrategy.selectGateway(options)
+  }
 }
 
 class WayfinderService {
@@ -114,6 +175,7 @@ class WayfinderService {
   // Note: AR.IO SDK does not currently expose x-ar-io-digest hashes in its public API
   private initialized = false
   private lastCleanup = 0
+  private needsTrustedGatewayRefresh = false
 
   constructor(config: Partial<WayfinderConfig> = {}) {
     // Load persisted config first, then apply defaults and overrides
@@ -135,6 +197,16 @@ class WayfinderService {
     try {
       logger.info('Initializing Wayfinder service')
       
+      // Update trusted gateways to use top 5 staked gateways if using network provider
+      if ((this.config.gatewayProvider === 'network' || this.config.gatewayProvider === 'simple-cache') &&
+          this.needsTrustedGatewayRefresh) {
+        await this.updateTrustedGatewaysFromNetwork()
+        this.needsTrustedGatewayRefresh = false
+      } else if (this.config.gatewayProvider === 'network' || this.config.gatewayProvider === 'simple-cache') {
+        // First time initialization with network provider
+        await this.updateTrustedGatewaysFromNetwork()
+      }
+      
       // Create gateway provider based on configuration
       const gatewaysProvider = this.createGatewayProvider()
 
@@ -151,8 +223,8 @@ class WayfinderService {
         routingStrategy,
         events: {
           onVerificationSucceeded: (event) => {
-            // Try to extract gateway from event
-            const gateway = (event as any).gateway || (event as any).gatewayUrl || this.extractGatewayFromUrl((event as any).url || '') || 'verified'
+            // Gateway info not available in this event
+            const gateway = 'verified'
             
             this.handleVerificationEvent({
               type: 'verification-completed',
@@ -162,26 +234,13 @@ class WayfinderService {
             })
           },
           onVerificationFailed: (event) => {
-            // Try multiple ways to extract txId from the event
-            let txId = (event as any).txId || (event as any).transactionId || (event as any).id
-            let errorMessage = (event as any).error?.message || (event as any).message || 'Verification failed'
-            
-            // If we still don't have a txId, try to extract from URL or other properties
-            if (!txId && (event as any).url) {
-              const urlMatch = (event as any).url.match(/ar:\/\/([a-zA-Z0-9_-]{43})/)
-              if (urlMatch) {
-                txId = urlMatch[1]
-              }
-            }
-            
-            if (txId && txId !== 'unknown') {
-              this.handleVerificationEvent({
-                type: 'verification-failed',
-                txId,
-                error: errorMessage,
-                timestamp: Date.now()
-              })
-            }
+            // event is an Error object, not a structured event
+            this.handleVerificationEvent({
+              type: 'verification-failed',
+              txId: 'unknown', // txId not available in error
+              error: event.message || 'Verification failed',
+              timestamp: Date.now()
+            })
           },
           onVerificationProgress: (event) => {
             if (event.totalBytes > 0) {
@@ -200,11 +259,92 @@ class WayfinderService {
         }
       })
 
+      // Set up additional event listeners via emitter
+      if (this.wayfinder.emitter) {
+        this.wayfinder.emitter.on('routing-succeeded', (event) => {
+          this.handleVerificationEvent({
+            type: 'routing-succeeded',
+            txId: 'unknown', // txId not available in routing events
+            gateway: event.selectedGateway,
+            timestamp: Date.now()
+          })
+        })
+        
+        this.wayfinder.emitter.on('routing-failed', (event) => {
+          this.handleVerificationEvent({
+            type: 'routing-failed',
+            txId: 'unknown', // txId not available in routing events
+            error: event.message || 'Routing failed',
+            timestamp: Date.now()
+          })
+        })
+      }
+
       this.initialized = true
       logger.info('Wayfinder service initialized successfully')
     } catch (error) {
       logger.error('Failed to initialize Wayfinder:', error)
       this.config.enableWayfinder = false
+    }
+  }
+
+  /**
+   * Fetch top staked gateways from AR.IO network and update trusted gateways
+   */
+  private async updateTrustedGatewaysFromNetwork(): Promise<void> {
+    try {
+      logger.info('Fetching top staked gateways from AR.IO network...')
+      
+      // Use ARIO SDK directly to fetch gateways
+      const ario = ARIO.mainnet()
+      
+      // Fetch gateways sorted by stake
+      const gatewayResult = await ario.getGateways({
+        sortBy: 'operatorStake',
+        sortOrder: 'desc',
+        limit: 100 // Fetch more to ensure we get active ones
+      })
+      
+      logger.info(`ARIO.getGateways returned ${gatewayResult?.items?.length || 0} gateways`)
+      
+      if (gatewayResult?.items && gatewayResult.items.length > 0) {
+        // Filter for active gateways and get top 5
+        const activeGateways = gatewayResult.items
+          .filter(g => g.status === 'joined') // Only active gateways
+          .slice(0, 5) // Top 5 by stake
+        
+        logger.info(`Found ${activeGateways.length} active gateways from top staked`)
+        
+        // Convert to URLs
+        const trustedGatewayUrls = activeGateways.map(gateway => {
+          // Gateway objects have gatewayAddress (domain) and settings.protocol
+          const protocol = gateway.settings?.protocol || 'https'
+          const port = gateway.settings?.port
+          const fqdn = gateway.settings?.fqdn || gateway.gatewayAddress
+          
+          // Build URL
+          let url = `${protocol}://${fqdn}`
+          if (port && port !== 443 && port !== 80) {
+            url += `:${port}`
+          }
+          
+          logger.info(`Gateway ${gateway.gatewayAddress}: stake=${gateway.operatorStake}, url=${url}`)
+          
+          return url
+        })
+        
+        if (trustedGatewayUrls.length > 0) {
+          this.config.trustedGateways = trustedGatewayUrls
+          logger.info(`Updated trusted gateways to top ${trustedGatewayUrls.length} staked gateways:`, trustedGatewayUrls)
+        } else {
+          logger.warn('No active gateways found, keeping default trusted gateways')
+        }
+      } else {
+        logger.warn('No gateways returned from network, keeping default trusted gateways')
+      }
+    } catch (error) {
+      logger.error('Failed to fetch top staked gateways:', error)
+      logger.info('Keeping default trusted gateways:', this.config.trustedGateways)
     }
   }
 
@@ -295,10 +435,6 @@ class WayfinderService {
       }
     }
 
-    // AO Configuration
-    if (env.VITE_WAYFINDER_AO_CU_URL) {
-      this.config.aoCuUrl = env.VITE_WAYFINDER_AO_CU_URL
-    }
   }
 
   /**
@@ -382,17 +518,12 @@ class WayfinderService {
   }
 
   /**
-   * Create ARIO instance with custom AO CU URL
+   * Create ARIO instance - simplified in new SDK
    */
   private createArioInstance() {
-    return ARIO.init({
-      process: new AOProcess({
-        processId: ARIO_MAINNET_PROCESS_ID,
-        ao: connect({
-          CU_URL: this.config.aoCuUrl,
-        }),
-      }),
-    })
+    // The new SDK handles AO connection internally
+    // Cast to any to handle type mismatch between SDK versions
+    return ARIO.mainnet() as any
   }
 
   /**
@@ -401,7 +532,7 @@ class WayfinderService {
   private createRoutingStrategy() {
     switch (this.config.routingStrategy) {
       case 'random':
-        return new RandomRoutingStrategy()
+        return new AvoidRepeatRandomRoutingStrategy()
         
       case 'static':
         return new StaticRoutingStrategy({
@@ -410,24 +541,22 @@ class WayfinderService {
         
       case 'fastest-ping':
         return new FastestPingRoutingStrategy({
-          timeoutMs: this.config.routingTimeoutMs || 500,
-          probePath: '/ar-io/info'
+          timeoutMs: this.config.routingTimeoutMs || 500
         })
         
       case 'round-robin':
+        // RoundRobinRoutingStrategy expects URL objects
         const gateways = this.config.staticGateways.map(url => new URL(url))
         return new RoundRobinRoutingStrategy({
           gateways: gateways.length > 0 ? gateways : [new URL('https://arweave.net')]
         })
         
       case 'preferred-fallback':
-        return new PreferredWithFallbackRoutingStrategy({
-          preferredGateway: this.config.preferredGateway || 'https://arweave.net',
-          fallbackStrategy: new RandomRoutingStrategy()
-        })
+        // Create a custom preferred-fallback strategy
+        return new PreferredFallbackRoutingStrategy(this.config.preferredGateway || 'https://arweave.net')
         
       default:
-        return new RandomRoutingStrategy()
+        return new AvoidRepeatRandomRoutingStrategy()
     }
   }
 
@@ -444,11 +573,11 @@ class WayfinderService {
       case 'hash':
         logger.info(`Verification strategy: hash with trusted gateways: ${this.config.trustedGateways.join(', ')}`)
         return new HashVerificationStrategy({
-          trustedHashProvider: new TrustedGatewaysHashProvider({
-            gatewaysProvider: new StaticGatewaysProvider({
-              gateways: this.config.trustedGateways,
-            }),
-          }),
+          trustedGateways: this.config.trustedGateways.map(url => {
+            // Ensure URL doesn't have trailing slash and is properly formatted
+            const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url
+            return new URL(cleanUrl)
+          })
         })
 
       default:
@@ -478,8 +607,11 @@ class WayfinderService {
   /**
    * Get content URL via Wayfinder or fallback to original gateway
    * Now with intelligent caching and size-aware fetching
+   * @param request Content request details
+   * @param forceLoad Force loading even for large files
+   * @param preload If true, only returns cached content or URL without verification
    */
-  async getContentUrl(request: ContentRequest, forceLoad: boolean = false): Promise<ContentResponse> {
+  async getContentUrl(request: ContentRequest, forceLoad: boolean = false, preload: boolean = false): Promise<ContentResponse> {
     const { txId, path = '', contentType, size } = request
     const cacheKey = `${txId}${path}`
 
@@ -499,7 +631,7 @@ class WayfinderService {
           timestamp: Date.now()
         },
         data: null, // No data for large files unless forced
-        contentType,
+        contentType: contentType || null,
         fromCache: false
       }
     }
@@ -536,6 +668,26 @@ class WayfinderService {
         data: null, // No data in URL-only cache
         contentType: null, // Will be determined by caller
         fromCache: true
+      }
+    }
+
+    // If preloading, return URL without verification
+    if (preload) {
+      const fallbackGateway = this.config.fallbackGateways[0] || determineFallbackGateway()
+      const url = `${fallbackGateway}/${txId}${path}`
+      
+      return {
+        url,
+        gateway: fallbackGateway,
+        verified: false,
+        verificationStatus: {
+          txId,
+          status: 'not-verified',
+          timestamp: Date.now()
+        },
+        data: null,
+        contentType: contentType || null,
+        fromCache: false
       }
     }
 
@@ -894,7 +1046,33 @@ class WayfinderService {
    */
   updateConfig(newConfig: Partial<WayfinderConfig>): void {
     const oldConfig = { ...this.config }
-    this.config = { ...this.config, ...newConfig }
+    
+    // Check if we're switching to network provider
+    const switchingToNetwork = 
+      (oldConfig.gatewayProvider !== 'network' && oldConfig.gatewayProvider !== 'simple-cache') &&
+      (newConfig.gatewayProvider === 'network' || newConfig.gatewayProvider === 'simple-cache')
+    
+    // For trusted gateways: Only override if explicitly provided OR we're not using network provider
+    if ('trustedGateways' in newConfig && 
+        (this.config.gatewayProvider === 'static' || switchingToNetwork)) {
+      // Allow trusted gateway changes for static provider or when switching to network
+      this.config = { ...this.config, ...newConfig }
+    } else if (!('trustedGateways' in newConfig)) {
+      // Normal config update without trusted gateway changes
+      this.config = { ...this.config, ...newConfig }
+    } else {
+      // Skip trusted gateway override for network provider unless switching
+      const { trustedGateways, ...configWithoutTrustedGateways } = newConfig
+      this.config = { ...this.config, ...configWithoutTrustedGateways }
+      logger.info('Preserving network-fetched trusted gateways, ignoring UI override')
+    }
+    
+    // Handle network provider switch - trigger gateway refresh
+    if (switchingToNetwork) {
+      logger.info('Switching to network provider, will fetch top staked gateways on next initialization')
+      // Mark that we need to refresh trusted gateways
+      this.needsTrustedGatewayRefresh = true
+    }
     
     // Save complete configuration to localStorage for persistence
     localStorage.setItem('wayfinder-config', JSON.stringify({
@@ -909,8 +1087,7 @@ class WayfinderService {
       verificationStrategy: this.config.verificationStrategy,
       verificationTimeoutMs: this.config.verificationTimeoutMs,
       staticGateways: this.config.staticGateways,
-      trustedGateways: this.config.trustedGateways,
-      aoCuUrl: this.config.aoCuUrl
+      trustedGateways: this.config.trustedGateways
     }))
     
     // Check if we need to re-initialize Wayfinder due to significant config changes
@@ -925,7 +1102,6 @@ class WayfinderService {
       oldConfig.routingTimeoutMs !== this.config.routingTimeoutMs ||
       oldConfig.verificationStrategy !== this.config.verificationStrategy ||
       oldConfig.verificationTimeoutMs !== this.config.verificationTimeoutMs ||
-      oldConfig.aoCuUrl !== this.config.aoCuUrl ||
       JSON.stringify(oldConfig.staticGateways) !== JSON.stringify(this.config.staticGateways) ||
       JSON.stringify(oldConfig.trustedGateways) !== JSON.stringify(this.config.trustedGateways)
     )
@@ -970,8 +1146,7 @@ class WayfinderService {
           verificationStrategy: parsed.verificationStrategy,
           verificationTimeoutMs: parsed.verificationTimeoutMs,
           staticGateways: parsed.staticGateways,
-          trustedGateways: parsed.trustedGateways,
-          aoCuUrl: parsed.aoCuUrl
+          trustedGateways: parsed.trustedGateways
         }
       }
     } catch (error) {

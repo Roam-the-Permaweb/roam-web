@@ -39,7 +39,8 @@ export function usePreloading(currentTx: TxMeta | null, channel: Channel) {
       
       if (isWayfinderAvailable) {
         try {
-          const wayfinderResult = await wayfinderService.getContentUrl(contentRequest)
+          // Use preload mode - no verification, uses cache if available
+          const wayfinderResult = await wayfinderService.getContentUrl(contentRequest, false, true)
           contentUrl = wayfinderResult.url
         } catch (error) {
           // Fallback to original gateway
