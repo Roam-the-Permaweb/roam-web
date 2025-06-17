@@ -232,6 +232,14 @@ export function App() {
     appState.setShowInterstitial
   )
   
+  // Create error handler for MediaView
+  const handleCorrupt = navigation.handleCorruptContent(
+    appState.channel,
+    recordClick,
+    shouldShowInterstitial,
+    appState.setShowInterstitial
+  )
+  
   const handleShare = () => navigation.handleShare(
     appState.currentTx, 
     appState.media, 
@@ -363,7 +371,7 @@ export function App() {
               privacyOn={appState.privacyOn}
               onPrivacyToggle={appState.togglePrivacy}
               onZoom={(src) => appState.setZoomSrc(src)}
-              onCorrupt={handleNext}
+              onCorrupt={handleCorrupt}
               loading={appState.loading}
               onShare={handleShare}
               onDownload={handleDownload}

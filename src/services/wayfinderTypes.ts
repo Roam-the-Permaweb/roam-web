@@ -9,30 +9,61 @@ export interface VerificationStatus {
   timestamp: number
 }
 
+// Gateway provider configuration types
+export interface NetworkProviderConfig {
+  sortBy: 'operatorStake' | 'totalDelegatedStake'
+  sortOrder: 'asc' | 'desc'
+  limit: number
+}
+
+export interface StaticProviderConfig {
+  gateways: string[]
+}
+
+export interface CacheProviderConfig {
+  cacheTimeoutMinutes: number
+  wrappedProvider: 'network' | 'static'
+  wrappedProviderConfig: NetworkProviderConfig | StaticProviderConfig
+}
+
+export type GatewayProviderConfig = 
+  | { type: 'network'; config: NetworkProviderConfig }
+  | { type: 'static'; config: StaticProviderConfig }
+  | { type: 'simple-cache'; config: CacheProviderConfig }
+
+// Routing strategy configuration types
+export interface RoutingStrategyConfig {
+  strategy: 'random' | 'fastest-ping' | 'round-robin' | 'static' | 'preferred-fallback'
+  // Strategy-specific configs
+  staticGateway?: string         // For static strategy
+  preferredGateway?: string      // For preferred-fallback strategy
+  timeoutMs?: number            // For fastest-ping strategy
+  probePath?: string            // For fastest-ping strategy
+}
+
+// Main configuration structure
 export interface WayfinderConfig {
-  // Master switch
-  enableWayfinder: boolean        // Enable both routing and verification
+  // Master control
+  enableWayfinder: boolean
   
-  // Gateway provider configuration
-  gatewayProvider: 'network' | 'static' | 'simple-cache'
-  gatewayLimit: number           // Max gateways to consider for routing
-  staticGateways: string[]       // Gateway list for static provider
-  cacheTimeoutMinutes: number    // TTL for cached gateway lists
+  // Routing configuration (required when Wayfinder enabled)
+  routing: {
+    gatewayProvider: GatewayProviderConfig
+    strategy: RoutingStrategyConfig
+  }
   
-  // Routing configuration
-  routingStrategy: 'random' | 'fastest-ping' | 'round-robin' | 'static' | 'preferred-fallback'
-  staticRoutingGateway?: string  // Gateway URL for static routing strategy
-  preferredGateway?: string      // Preferred gateway for preferred-fallback strategy
-  routingTimeoutMs?: number      // Timeout for ping-based routing strategies
-  probePath?: string             // Path for ping-based routing (default: '/ar-io/info')
+  // Verification configuration (optional)
+  verification: {
+    enabled: boolean
+    strategy: 'hash' | 'none'
+    gatewayProvider: GatewayProviderConfig
+    timeoutMs: number
+  }
   
-  // Verification configuration
-  verificationStrategy: 'hash' | 'none'
-  trustedGateways: string[]      // Gateways used for verification hash comparison
-  verificationTimeoutMs: number  // Timeout for verification process
-  
-  // Fallback configuration
-  fallbackGateways: string[]     // Direct gateways when Wayfinder unavailable
+  // Fallback configuration (when Wayfinder disabled)
+  fallback: {
+    gateways: string[]
+  }
 }
 
 export interface ContentRequest {

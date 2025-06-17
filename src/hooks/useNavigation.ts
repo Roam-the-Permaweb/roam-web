@@ -4,6 +4,11 @@ import { addHistory, goBack, goForward, peekForward, resetHistory } from '../eng
 import { logger } from '../utils/logger'
 import type { Channel, TxMeta } from '../constants'
 
+// Constants for error handling
+const ERROR_DEBOUNCE_MS = 2000 // Minimum 2 seconds between auto-advances on error
+const MAX_CONSECUTIVE_ERRORS = 5 // Stop auto-advancing after 5 consecutive errors
+const ERROR_RESET_TIMEOUT = 10000 // Reset error count after 10 seconds of no errors
+
 interface NavigationCallbacks {
   setCurrentTx: (tx: TxMeta | null) => void
   setLoading: (loading: boolean) => void
@@ -16,6 +21,9 @@ interface NavigationCallbacks {
 
 export function useNavigation(callbacks: NavigationCallbacks) {
   const blockRangeRef = useRef<{ min?: number; max?: number } | null>(null)
+  const lastErrorTimeRef = useRef<number>(0)
+  const consecutiveErrorsRef = useRef<number>(0)
+  const errorResetTimerRef = useRef<NodeJS.Timeout | null>(null)
   
   const {
     setCurrentTx,
@@ -72,7 +80,44 @@ export function useNavigation(callbacks: NavigationCallbacks) {
     }
   }
   
-  const handleNext = async (channel: Channel, recordClick: () => void, shouldShowInterstitial: boolean, setShowInterstitial: (show: boolean) => void) => {
+  const handleNext = async (channel: Channel, recordClick: () => void, shouldShowInterstitial: boolean, setShowInterstitial: (show: boolean) => void, isFromError: boolean = false) => {
+    // If this is from an error, check debouncing and error limits
+    if (isFromError) {
+      const now = Date.now()
+      const timeSinceLastError = now - lastErrorTimeRef.current
+      
+      // Enforce minimum time between error-triggered navigations
+      if (timeSinceLastError < ERROR_DEBOUNCE_MS) {
+        logger.warn(`Skipping error-triggered navigation - only ${timeSinceLastError}ms since last error (min: ${ERROR_DEBOUNCE_MS}ms)`)
+        return
+      }
+      
+      // Check if we've hit the consecutive error limit
+      if (consecutiveErrorsRef.current >= MAX_CONSECUTIVE_ERRORS) {
+        logger.error(`Stopping auto-advance after ${MAX_CONSECUTIVE_ERRORS} consecutive errors`)
+        setError('Too many consecutive errors. Please check your connection and try again.')
+        return
+      }
+      
+      // Update error tracking
+      lastErrorTimeRef.current = now
+      consecutiveErrorsRef.current++
+      
+      // Set up or reset the error count reset timer
+      if (errorResetTimerRef.current) {
+        clearTimeout(errorResetTimerRef.current)
+      }
+      errorResetTimerRef.current = setTimeout(() => {
+        consecutiveErrorsRef.current = 0
+        logger.debug('Reset consecutive error count after timeout')
+      }, ERROR_RESET_TIMEOUT)
+      
+      logger.warn(`Error-triggered navigation (${consecutiveErrorsRef.current}/${MAX_CONSECUTIVE_ERRORS} consecutive errors)`)
+    } else {
+      // Reset error count on successful user-initiated navigation
+      consecutiveErrorsRef.current = 0
+    }
+    
     clearError()
     setLoading(true)
     recordClick()
@@ -89,6 +134,10 @@ export function useNavigation(callbacks: NavigationCallbacks) {
         const tx = await goForward()
         if (tx) {
           setCurrentTx(tx)
+          // Reset error count on successful navigation
+          if (!isFromError) {
+            consecutiveErrorsRef.current = 0
+          }
         } else {
           setError('Unexpected missing forward history.')
         }
@@ -99,6 +148,10 @@ export function useNavigation(callbacks: NavigationCallbacks) {
         } else {
           await addHistory(tx)
           setCurrentTx(tx)
+          // Reset error count on successful navigation
+          if (!isFromError) {
+            consecutiveErrorsRef.current = 0
+          }
         }
       }
     } catch (e) {
@@ -253,6 +306,14 @@ export function useNavigation(callbacks: NavigationCallbacks) {
     }
   }
   
+  // Create a debounced error handler for MediaView
+  const handleCorruptContent = (channel: Channel, recordClick: () => void, shouldShowInterstitial: boolean, setShowInterstitial: (show: boolean) => void) => {
+    return async () => {
+      logger.warn('Content failed to load, attempting to skip to next...')
+      await handleNext(channel, recordClick, shouldShowInterstitial, setShowInterstitial, true)
+    }
+  }
+  
   return {
     blockRangeRef,
     handleReset,
@@ -261,6 +322,7 @@ export function useNavigation(callbacks: NavigationCallbacks) {
     handleRoam,
     handleShare,
     handleDownload,
-    initializeQueue
+    initializeQueue,
+    handleCorruptContent
   }
 }

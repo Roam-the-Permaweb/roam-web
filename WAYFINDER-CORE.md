@@ -1,23 +1,23 @@
-# Wayfinder
+# Wayfinder Core
 
-Wayfinder is a client-side routing and verification solution for Arweave content. It enables applications to retrieve data through decentralized gateways while ensuring integrity through cryptographic verification.
+`@ar.io/wayfinder` is the core library for the Wayfinder project. It provides the core functionality for routing and verifying data through the ar.io network.
 
 ## Quick Start
 
 ### Installation
 
-Wayfinder is currently available as a beta release in the `@ar.io/sdk` package. To install the latest version, run:
+`@ar.io/wayfinder` is currently available as a beta release. To install the latest version, run:
 
 ```bash
-npm install @ar.io/sdk@beta
+npm install @ar.io/wayfinder@beta
 # or
-yarn add @ar.io/sdk@beta
+yarn add @ar.io/wayfinder@beta
 ```
 
 ### Basic Usage
 
 ```javascript
-import { Wayfinder } from '@ar.io/sdk';
+import { Wayfinder } from '@ar.io/wayfinder';
 
 // create a new Wayfinder instance with default settings
 const wayfinder = new Wayfinder();
@@ -53,10 +53,8 @@ const wayfinder = new Wayfinder({
   }),
   // verify the data using the hash of the data against a list of trusted gateways
   verificationStrategy: new HashVerificationStrategy({
-    trustedHashProvider: new TrustedGatewaysHashProvider({
-      gatewaysProvider: new StaticGatewaysProvider({
-        gateways: ['https://arweave.net'],
-      }),
+    trustedHashProvider: new TrustedGatewaysProvider({
+      trustedGateways: ['https://permagate.io'],
     }),
   }),
 });
@@ -68,9 +66,8 @@ Wayfinder supports several ar:// URL formats:
 
 ```bash
 ar://TRANSACTION_ID              // Direct transaction ID
-ar://NAME                        // ArNS name
+ar://NAME                        // ArNS name (paths supported)
 ar:///info                       // Gateway endpoint (/info)
-ar://NAME/path/to/resource       // ArNS with path
 ```
 
 ## Gateway Providers
@@ -177,9 +174,9 @@ Wayfinder includes verification mechanisms to ensure the integrity of retrieved 
 
 | Verifier                        | Complexity | Performance | Security | Description                                                                                                  |
 | ------------------------------- | ---------- | ----------- | -------- | ------------------------------------------------------------------------------------------------------------ |
-| `HashVerificationStrategy`      | Low        | High        | Low      | Verifies data integrity using SHA-256 hash comparison                                                        |
+| `HashVerificationStrategy`      | Low        | High        | Low      | Verifies data integrity using SHA-256 hash comparison of the returned data                                   |
 | `DataRootVerificationStrategy`  | Medium     | Medium      | Low      | Verifies data using Arweave by computing the data root for the transaction (most useful for L1 transactions) |
-| `SignatureVerificationStrategy` | Medium     | Medium      | Medium   | Verifies signature of n Arweave transaction or data item using offsets provided by trusted gateway           |
+| `SignatureVerificationStrategy` | Medium     | Medium      | Medium   | Verifies signature of an Arweave transaction or data item using offsets provided by trusted gateway          |
 
 ### HashVerificationStrategy
 
@@ -194,11 +191,8 @@ import {
 
 const wayfinder = new Wayfinder({
   verificationStrategy: new HashVerificationStrategy({
-    // provide a list of trusted gateways
-    trustedHashProvider: new TrustedGatewaysHashProvider({
-      gatewaysProvider: new StaticGatewaysProvider({
-        gateways: ['https://permagate.io'],
-      }),
+    trustedHashProvider: new TrustedGatewaysProvider({
+      trustedGateways: ['https://permagate.io'],
     }),
   }),
 });
@@ -217,10 +211,8 @@ import {
 
 const wayfinder = new Wayfinder({
   verificationStrategy: new DataRootVerificationStrategy({
-    trustedDataRootProvider: new TrustedGatewaysDataRootProvider({
-      gatewaysProvider: new StaticGatewaysProvider({
-        gateways: ['https://arweave.net'],
-      }),
+    trustedDataRootProvider: new TrustedGatewaysProvider({
+      trustedGateways: ['https://permagate.io'],
     }),
   }),
 });

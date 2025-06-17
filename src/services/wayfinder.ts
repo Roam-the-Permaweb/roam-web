@@ -1,4 +1,4 @@
-import { 
+import {
   Wayfinder,
   SimpleCacheGatewaysProvider,
   NetworkGatewaysProvider,
@@ -7,19 +7,23 @@ import {
   RandomRoutingStrategy,
   StaticRoutingStrategy,
   FastestPingRoutingStrategy,
-  RoundRobinRoutingStrategy
-} from '@ar.io/wayfinder-core'
-import { ARIO } from '@ar.io/sdk'
-import { logger } from '../utils/logger'
-import { GATEWAY_DATA_SOURCE } from '../engine/fetchQueue'
-import type { 
+  RoundRobinRoutingStrategy,
+} from "@ar.io/wayfinder-core";
+import { ARIO } from "@ar.io/sdk";
+import { logger } from "../utils/logger";
+import { GATEWAY_DATA_SOURCE } from "../engine/fetchQueue";
+import type {
   WayfinderConfig,
   VerificationStatus,
   ContentRequest,
   ContentResponse,
   VerificationEvent,
-  CachedContent
-} from './wayfinderTypes'
+  CachedContent,
+  GatewayProviderConfig,
+  NetworkProviderConfig,
+  StaticProviderConfig,
+  CacheProviderConfig,
+} from "./wayfinderTypes";
 
 /**
  * Determine the fallback gateway based on the current hostname
@@ -29,322 +33,278 @@ import type {
  */
 function determineFallbackGateway(): string {
   try {
-    const hostname = window.location.hostname.toLowerCase()
-    
+    const hostname = window.location.hostname.toLowerCase();
+
     // Special case: roam.ar.io should use arweave.net
-    if (hostname === 'roam.ar.io') {
-      logger.info('Detected roam.ar.io hostname, using arweave.net as fallback')
-      return 'https://arweave.net'
+    if (hostname === "roam.ar.io") {
+      logger.info(
+        "Detected roam.ar.io hostname, using arweave.net as fallback"
+      );
+      return "https://arweave.net";
     }
-    
+
     // Extract gateway from roam.gateway.com pattern
-    if (hostname.startsWith('roam.')) {
-      const gatewayDomain = hostname.substring(5) // Remove 'roam.' prefix
-      const fallbackUrl = `https://${gatewayDomain}`
-      logger.info(`Detected roam subdomain on ${gatewayDomain}, using ${fallbackUrl} as fallback`)
-      return fallbackUrl
+    if (hostname.startsWith("roam.")) {
+      const gatewayDomain = hostname.substring(5); // Remove 'roam.' prefix
+      const fallbackUrl = `https://${gatewayDomain}`;
+      logger.info(
+        `Detected roam subdomain on ${gatewayDomain}, using ${fallbackUrl} as fallback`
+      );
+      return fallbackUrl;
     }
-    
+
     // Handle localhost and development scenarios
-    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('192.168.')) {
-      const fallback = GATEWAY_DATA_SOURCE[0] || 'https://arweave.net'
-      logger.info(`Development environment detected, using configured fallback: ${fallback}`)
-      return fallback
+    if (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname.startsWith("192.168.")
+    ) {
+      const fallback = GATEWAY_DATA_SOURCE[0] || "https://arweave.net";
+      logger.info(
+        `Development environment detected, using configured fallback: ${fallback}`
+      );
+      return fallback;
     }
-    
+
     // For direct gateway hosting (e.g., permagate.io/roam, ardrive.net/roam)
     // Use the current hostname as the gateway
-    if (hostname.includes('.')) {
-      const fallbackUrl = `https://${hostname}`
-      logger.info(`Direct gateway hosting detected, using ${fallbackUrl} as fallback`)
-      return fallbackUrl
+    if (hostname.includes(".")) {
+      const fallbackUrl = `https://${hostname}`;
+      logger.info(
+        `Direct gateway hosting detected, using ${fallbackUrl} as fallback`
+      );
+      return fallbackUrl;
     }
-    
+
     // Final fallback: use configured data source or arweave.net
-    const fallback = GATEWAY_DATA_SOURCE[0] || 'https://arweave.net'
-    logger.info(`Using default configured fallback gateway: ${fallback}`)
-    return fallback
+    const fallback = GATEWAY_DATA_SOURCE[0] || "https://arweave.net";
+    logger.info(`Using default configured fallback gateway: ${fallback}`);
+    return fallback;
   } catch (error) {
-    logger.warn('Failed to determine fallback gateway from hostname:', error)
-    return GATEWAY_DATA_SOURCE[0] || 'https://arweave.net'
+    logger.warn("Failed to determine fallback gateway from hostname:", error);
+    return GATEWAY_DATA_SOURCE[0] || "https://arweave.net";
   }
 }
 
-// Default configuration - All Wayfinder features disabled by default (experimental)
+// Default configuration - All Wayfinder features disabled by default
 const DEFAULT_CONFIG: WayfinderConfig = {
   // Master switch - disabled by default
   enableWayfinder: false,
-  
-  // Gateway provider configuration
-  gatewayProvider: 'network',
-  gatewayLimit: 5, // Top 5 staked gateways for better reliability
-  staticGateways: ['https://arweave.net', 'https://permagate.io'],
-  cacheTimeoutMinutes: 5, // Increased cache timeout to reduce requests
-  
-  // Routing configuration
-  routingStrategy: 'random',  // Default to random for performance
-  staticRoutingGateway: 'https://arweave.net',
-  preferredGateway: 'https://arweave.net',
-  routingTimeoutMs: 500,  // 500ms timeout for ping-based strategies
-  probePath: '/ar-io/info',  // Default probe path for ping-based routing
-  
-  // Verification configuration  
-  verificationStrategy: 'hash',  // Re-enabled with wayfinder-core 0.0.3-alpha.1
-  // Default trusted gateways - will be replaced with top 5 staked gateways on init
-  trustedGateways: [
-    'https://arweave.net',
-    'https://permagate.io', 
-    'https://vilenarios.com',
-    'https://arweave-search.goldsky.com',
-    'https://g8way.io'
-  ],
-  verificationTimeoutMs: 20000,
-  
-  // Fallback configuration - uses hostname-based detection
-  fallbackGateways: [determineFallbackGateway()]
-}
 
-/**
- * Custom routing strategy that avoids repeating the same gateway consecutively
- */
-class AvoidRepeatRandomRoutingStrategy {
-  private lastSelectedGateway: string | null = null
-  private baseStrategy = new RandomRoutingStrategy()
+  // Routing configuration (required when Wayfinder enabled)
+  routing: {
+    gatewayProvider: {
+      type: "simple-cache",
+      config: {
+        cacheTimeoutMinutes: 60, // Cache for 1 hour
+        wrappedProvider: "network",
+        wrappedProviderConfig: {
+          sortBy: "operatorStake",
+          sortOrder: "desc",
+          limit: 50, // Increased to 50 gateways for better random distribution
+        },
+      },
+    },
+    strategy: {
+      strategy: "random", // Default to random for load balancing
+      // Strategy-specific defaults
+      staticGateway: "https://arweave.net",
+      preferredGateway: "https://arweave.net",
+      timeoutMs: 500,
+      probePath: "/ar-io/info",
+    },
+  },
 
-  async selectGateway(options: { gateways: URL[], path?: string, subdomain?: string }): Promise<URL> {
-    const { gateways } = options
-    
-    if (gateways.length <= 1) {
-      // If only one gateway, use it
-      const selected = await this.baseStrategy.selectGateway(options)
-      this.lastSelectedGateway = selected.toString()
-      return selected
-    }
+  // Verification configuration (optional)
+  verification: {
+    enabled: true, // Enabled by default for security
+    strategy: "hash",
+    gatewayProvider: {
+      type: "network",
+      config: {
+        sortBy: "operatorStake",
+        sortOrder: "desc",
+        limit: 5, // Top 5 staked gateways for verification
+      },
+    },
+    timeoutMs: 20000,
+  },
 
-    // Filter out the last selected gateway if possible
-    const availableGateways = this.lastSelectedGateway 
-      ? gateways.filter(g => g.toString() !== this.lastSelectedGateway)
-      : gateways
-
-    // If filtering left us with no gateways, use all gateways
-    const gatewaysToChooseFrom = availableGateways.length > 0 ? availableGateways : gateways
-
-    // Select randomly from the filtered list
-    const selected = await this.baseStrategy.selectGateway({ ...options, gateways: gatewaysToChooseFrom })
-    this.lastSelectedGateway = selected.toString()
-    return selected
-  }
-}
-
-/**
- * Custom preferred-fallback routing strategy
- */
-class PreferredFallbackRoutingStrategy {
-  private preferredGateway: string
-  private fallbackStrategy = new AvoidRepeatRandomRoutingStrategy()
-
-  constructor(preferredGateway: string) {
-    this.preferredGateway = preferredGateway
-  }
-
-  async selectGateway(options: { gateways: URL[], path?: string, subdomain?: string }): Promise<URL> {
-    const { gateways } = options
-    
-    // Try to find the preferred gateway in the available list
-    const preferred = gateways.find(g => g.toString() === this.preferredGateway || 
-                                         g.toString() === this.preferredGateway + '/' ||
-                                         g.host === new URL(this.preferredGateway).host)
-    
-    if (preferred) {
-      return preferred
-    }
-
-    // If preferred gateway not available, fall back to random selection
-    logger.info(`Preferred gateway ${this.preferredGateway} not available, falling back to random selection`)
-    return this.fallbackStrategy.selectGateway(options)
-  }
-}
+  // Fallback configuration (when Wayfinder disabled)
+  fallback: {
+    gateways: [determineFallbackGateway()],
+  },
+};
 
 class WayfinderService {
-  private wayfinder: Wayfinder | null = null
-  private config: WayfinderConfig
-  private verificationStatuses = new Map<string, VerificationStatus>()
-  private eventListeners = new Set<(event: VerificationEvent) => void>()
-  private urlCache = new Map<string, { url: string; timestamp: number; gateway: string }>()
-  private contentCache = new Map<string, CachedContent>()
+  private wayfinder: Wayfinder | null = null;
+  private config: WayfinderConfig;
+  private verificationStatuses = new Map<string, VerificationStatus>();
+  private eventListeners = new Set<(event: VerificationEvent) => void>();
+  private urlCache = new Map<
+    string,
+    { url: string; timestamp: number; gateway: string }
+  >();
+  private contentCache = new Map<string, CachedContent>();
   // Note: AR.IO SDK does not currently expose x-ar-io-digest hashes in its public API
-  private initialized = false
-  private lastCleanup = 0
-  private needsTrustedGatewayRefresh = false
+  private initialized = false;
+  private lastCleanup = 0;
 
   constructor(config: Partial<WayfinderConfig> = {}) {
+    logger.info("Initializing WayfinderService...");
+
     // Load persisted config first, then apply defaults and overrides
-    const persistedConfig = this.loadPersistedConfig()
-    this.config = { ...DEFAULT_CONFIG, ...persistedConfig, ...config }
-    
+    const persistedConfig = this.loadPersistedConfig();
+    logger.info("Persisted config:", JSON.stringify(persistedConfig, null, 2));
+
+    this.config = { ...DEFAULT_CONFIG, ...persistedConfig, ...config };
+    logger.info(
+      "Initial config (with defaults and persisted):",
+      JSON.stringify(this.config, null, 2)
+    );
+
     // Parse granular environment variables
-    this.parseEnvironmentConfig()
-    
+    this.parseEnvironmentConfig();
+
     // Validate configuration
-    this.validateConfiguration()
+    this.validateConfiguration();
+
+    logger.info(
+      "Final config after parsing and validation:",
+      JSON.stringify(this.config, null, 2)
+    );
   }
 
   async initialize(): Promise<void> {
     if (this.initialized || !this.config.enableWayfinder) {
-      return
+      logger.info(
+        `Skipping Wayfinder initialization. Initialized: ${this.initialized}, Enabled: ${this.config.enableWayfinder}`
+      );
+      return;
     }
 
     try {
-      logger.info('Initializing Wayfinder service')
-      
-      // Update trusted gateways to use top 5 staked gateways if using network provider
-      if ((this.config.gatewayProvider === 'network' || this.config.gatewayProvider === 'simple-cache') &&
-          this.needsTrustedGatewayRefresh) {
-        await this.updateTrustedGatewaysFromNetwork()
-        this.needsTrustedGatewayRefresh = false
-      } else if (this.config.gatewayProvider === 'network' || this.config.gatewayProvider === 'simple-cache') {
-        // First time initialization with network provider
-        await this.updateTrustedGatewaysFromNetwork()
+      logger.info(
+        "Initializing Wayfinder service with config:",
+        JSON.stringify(this.config, null, 2)
+      );
+
+      // Create gateway provider for routing
+      logger.info("Creating routing gateway provider...");
+      const routingGatewayProvider = this.createGatewayProvider(
+        this.config.routing.gatewayProvider
+      );
+
+      // Log the gateways available from the provider
+      try {
+        const availableGateways = await routingGatewayProvider.getGateways();
+        logger.info(
+          `Routing gateways available (${availableGateways.length}):`,
+          availableGateways.map((g: URL) => g.toString()).join(", ")
+        );
+      } catch (error) {
+        logger.warn("Failed to get gateways from provider:", error);
       }
-      
-      // Create gateway provider based on configuration
-      const gatewaysProvider = this.createGatewayProvider()
 
-      // Create verification strategy based on configuration
-      const verificationStrategy = this.createVerificationStrategy()
+      // Create routing strategy
+      logger.info(
+        `Creating routing strategy: ${this.config.routing.strategy.strategy}`
+      );
+      const routingStrategy = await this.createRoutingStrategy(
+        routingGatewayProvider
+      );
 
-      // Create routing strategy to avoid unnecessary network calls
-      const routingStrategy = this.createRoutingStrategy()
+      // Create verification strategy (optional)
+      let verificationStrategy;
+      if (this.config.verification.enabled) {
+        logger.info("Creating verification strategy...");
+        verificationStrategy = await this.createVerificationStrategy();
+      } else {
+        logger.info("Verification disabled, skipping verification strategy");
+      }
 
       // Initialize Wayfinder - simplified like the example
+      logger.info("Creating Wayfinder instance...");
       this.wayfinder = new Wayfinder({
-        gatewaysProvider,
+        gatewaysProvider: routingGatewayProvider,
         verificationStrategy,
         routingStrategy,
         events: {
           onVerificationSucceeded: (event) => {
             // Gateway info not available in this event
-            const gateway = 'verified'
-            
+            const gateway = "verified";
+            logger.info(`Verification succeeded for ${event.txId}`);
+
             this.handleVerificationEvent({
-              type: 'verification-completed',
+              type: "verification-completed",
               txId: event.txId,
               gateway,
-              timestamp: Date.now()
-            })
+              timestamp: Date.now(),
+            });
           },
           onVerificationFailed: (event) => {
             // event is an Error object, not a structured event
+            logger.warn("Verification failed:", event);
             this.handleVerificationEvent({
-              type: 'verification-failed',
-              txId: 'unknown', // txId not available in error
-              error: event.message || 'Verification failed',
-              timestamp: Date.now()
-            })
+              type: "verification-failed",
+              txId: "unknown", // txId not available in error
+              error: event.message || "Verification failed",
+              timestamp: Date.now(),
+            });
           },
           onVerificationProgress: (event) => {
             if (event.totalBytes > 0) {
-              const progress = (event.processedBytes / event.totalBytes) * 100
-              const roundedProgress = Math.round(progress / 10) * 10
+              const progress = (event.processedBytes / event.totalBytes) * 100;
+              const roundedProgress = Math.round(progress / 10) * 10;
               if (roundedProgress > 0) {
+                logger.debug(
+                  `Verification progress for ${event.txId}: ${roundedProgress}%`
+                );
                 this.handleVerificationEvent({
-                  type: 'verification-progress',
+                  type: "verification-progress",
                   txId: event.txId,
                   progress: roundedProgress,
-                  timestamp: Date.now()
-                })
+                  timestamp: Date.now(),
+                });
               }
             }
           },
-        }
-      })
+        },
+      });
 
       // Set up additional event listeners via emitter
       if (this.wayfinder.emitter) {
-        this.wayfinder.emitter.on('routing-succeeded', (event) => {
+        logger.info("Setting up Wayfinder event emitter listeners...");
+        this.wayfinder.emitter.on("routing-succeeded", (event) => {
+          logger.info("Routing succeeded to gateway:", event.selectedGateway);
           this.handleVerificationEvent({
-            type: 'routing-succeeded',
-            txId: 'unknown', // txId not available in routing events
+            type: "routing-succeeded",
+            txId: "unknown", // txId not available in routing events
             gateway: event.selectedGateway,
-            timestamp: Date.now()
-          })
-        })
-        
-        this.wayfinder.emitter.on('routing-failed', (event) => {
+            timestamp: Date.now(),
+          });
+        });
+
+        this.wayfinder.emitter.on("routing-failed", (event) => {
+          logger.warn("Routing failed:", event);
           this.handleVerificationEvent({
-            type: 'routing-failed',
-            txId: 'unknown', // txId not available in routing events
-            error: event.message || 'Routing failed',
-            timestamp: Date.now()
-          })
-        })
-      }
-
-      this.initialized = true
-      logger.info('Wayfinder service initialized successfully')
-    } catch (error) {
-      logger.error('Failed to initialize Wayfinder:', error)
-      this.config.enableWayfinder = false
-    }
-  }
-
-  /**
-   * Fetch top staked gateways from AR.IO network and update trusted gateways
-   */
-  private async updateTrustedGatewaysFromNetwork(): Promise<void> {
-    try {
-      logger.info('Fetching top staked gateways from AR.IO network...')
-      
-      // Use ARIO SDK directly to fetch gateways
-      const ario = ARIO.mainnet()
-      
-      // Fetch gateways sorted by stake
-      const gatewayResult = await ario.getGateways({
-        sortBy: 'operatorStake',
-        sortOrder: 'desc',
-        limit: 100 // Fetch more to ensure we get active ones
-      })
-      
-      logger.info(`ARIO.getGateways returned ${gatewayResult?.items?.length || 0} gateways`)
-      
-      if (gatewayResult?.items && gatewayResult.items.length > 0) {
-        // Filter for active gateways and get top 5
-        const activeGateways = gatewayResult.items
-          .filter(g => g.status === 'joined') // Only active gateways
-          .slice(0, 5) // Top 5 by stake
-        
-        logger.info(`Found ${activeGateways.length} active gateways from top staked`)
-        
-        // Convert to URLs
-        const trustedGatewayUrls = activeGateways.map(gateway => {
-          // Gateway objects have gatewayAddress (domain) and settings.protocol
-          const protocol = gateway.settings?.protocol || 'https'
-          const port = gateway.settings?.port
-          const fqdn = gateway.settings?.fqdn || gateway.gatewayAddress
-          
-          // Build URL
-          let url = `${protocol}://${fqdn}`
-          if (port && port !== 443 && port !== 80) {
-            url += `:${port}`
-          }
-          
-          logger.info(`Gateway ${gateway.gatewayAddress}: stake=${gateway.operatorStake}, url=${url}`)
-          
-          return url
-        })
-        
-        if (trustedGatewayUrls.length > 0) {
-          this.config.trustedGateways = trustedGatewayUrls
-          logger.info(`Updated trusted gateways to top ${trustedGatewayUrls.length} staked gateways:`, trustedGatewayUrls)
-        } else {
-          logger.warn('No active gateways found, keeping default trusted gateways')
-        }
+            type: "routing-failed",
+            txId: "unknown", // txId not available in routing events
+            error: event.message || "Routing failed",
+            timestamp: Date.now(),
+          });
+        });
       } else {
-        logger.warn('No gateways returned from network, keeping default trusted gateways')
+        logger.warn(
+          "Wayfinder emitter not available, routing events will not be captured"
+        );
       }
+
+      this.initialized = true;
+      logger.info("Wayfinder service initialized successfully");
     } catch (error) {
-      logger.error('Failed to fetch top staked gateways:', error)
-      logger.info('Keeping default trusted gateways:', this.config.trustedGateways)
+      logger.error("Failed to initialize Wayfinder:", error);
+      this.config.enableWayfinder = false;
     }
   }
 
@@ -352,168 +312,295 @@ class WayfinderService {
    * Parse granular environment variables for Wayfinder configuration
    */
   private parseEnvironmentConfig(): void {
-    const env = import.meta.env
+    const env = import.meta.env;
 
-    // Master control - VITE_ENABLE_WAYFINDER enables both routing and verification
-    if (env.VITE_ENABLE_WAYFINDER === 'true') {
-      this.config.enableWayfinder = true
-    } else if (env.VITE_ENABLE_WAYFINDER === 'false') {
-      this.config.enableWayfinder = false
-      return // Skip other parsing if master switch is off
+    // Master control
+    if (env.VITE_ENABLE_WAYFINDER === "true") {
+      this.config.enableWayfinder = true;
+    } else if (env.VITE_ENABLE_WAYFINDER === "false") {
+      this.config.enableWayfinder = false;
+      return; // Skip other parsing if master switch is off
     }
 
-    // Legacy environment variable support (now enables master switch)
-    if (env.VITE_WAYFINDER_ENABLE_ROUTING === 'true' || env.VITE_WAYFINDER_ENABLE_VERIFICATION === 'true') {
-      this.config.enableWayfinder = true
+    // Legacy support - if either routing or verification was enabled, enable master
+    if (
+      env.VITE_WAYFINDER_ENABLE_ROUTING === "true" ||
+      env.VITE_WAYFINDER_ENABLE_VERIFICATION === "true"
+    ) {
+      this.config.enableWayfinder = true;
     }
 
-    // Gateway provider configuration
-    if (env.VITE_WAYFINDER_GATEWAY_PROVIDER) {
-      const provider = env.VITE_WAYFINDER_GATEWAY_PROVIDER as 'network' | 'static' | 'simple-cache'
-      if (['network', 'static', 'simple-cache'].includes(provider)) {
-        this.config.gatewayProvider = provider
+    // Routing provider configuration
+    if (env.VITE_WAYFINDER_ROUTING_PROVIDER) {
+      const provider = env.VITE_WAYFINDER_ROUTING_PROVIDER as
+        | "network"
+        | "static"
+        | "simple-cache";
+      if (["network", "static", "simple-cache"].includes(provider)) {
+        this.config.routing.gatewayProvider.type = provider;
       }
     }
 
-    if (env.VITE_WAYFINDER_GATEWAY_LIMIT) {
-      const limit = parseInt(env.VITE_WAYFINDER_GATEWAY_LIMIT)
-      if (!isNaN(limit) && limit > 0) {
-        this.config.gatewayLimit = limit
+    if (env.VITE_WAYFINDER_ROUTING_GATEWAY_LIMIT) {
+      const limit = parseInt(env.VITE_WAYFINDER_ROUTING_GATEWAY_LIMIT);
+      if (
+        !isNaN(limit) &&
+        limit > 0 &&
+        this.config.routing.gatewayProvider.type === "network"
+      ) {
+        (
+          this.config.routing.gatewayProvider.config as NetworkProviderConfig
+        ).limit = limit;
       }
     }
 
-    if (env.VITE_WAYFINDER_STATIC_GATEWAYS) {
-      this.config.staticGateways = env.VITE_WAYFINDER_STATIC_GATEWAYS.split(',').map((g: string) => g.trim())
-    }
-
-    // Verification configuration
-    if (env.VITE_WAYFINDER_VERIFICATION_STRATEGY) {
-      const strategy = env.VITE_WAYFINDER_VERIFICATION_STRATEGY as 'hash' | 'none'
-      if (['hash', 'none'].includes(strategy)) {
-        this.config.verificationStrategy = strategy
+    if (env.VITE_WAYFINDER_ROUTING_STATIC_GATEWAYS) {
+      const gateways = env.VITE_WAYFINDER_ROUTING_STATIC_GATEWAYS.split(
+        ","
+      ).map((g: string) => g.trim());
+      if (this.config.routing.gatewayProvider.type === "static") {
+        (
+          this.config.routing.gatewayProvider.config as StaticProviderConfig
+        ).gateways = gateways;
       }
     }
 
-    if (env.VITE_WAYFINDER_TRUSTED_GATEWAYS) {
-      this.config.trustedGateways = env.VITE_WAYFINDER_TRUSTED_GATEWAYS.split(',').map((g: string) => g.trim())
-    }
-
-    if (env.VITE_WAYFINDER_VERIFICATION_TIMEOUT) {
-      const timeout = parseInt(env.VITE_WAYFINDER_VERIFICATION_TIMEOUT)
-      if (!isNaN(timeout) && timeout > 0) {
-        this.config.verificationTimeoutMs = timeout
-      }
-    }
-
-    if (env.VITE_WAYFINDER_CACHE_TIMEOUT) {
-      const timeout = parseInt(env.VITE_WAYFINDER_CACHE_TIMEOUT)
-      if (!isNaN(timeout) && timeout > 0) {
-        this.config.cacheTimeoutMinutes = timeout
-      }
-    }
-    
-    // Routing configuration
+    // Routing strategy configuration
     if (env.VITE_WAYFINDER_ROUTING_STRATEGY) {
-      const strategy = env.VITE_WAYFINDER_ROUTING_STRATEGY as 'random' | 'fastest-ping' | 'round-robin' | 'static' | 'preferred-fallback'
-      if (['random', 'fastest-ping', 'round-robin', 'static', 'preferred-fallback'].includes(strategy)) {
-        this.config.routingStrategy = strategy
+      const strategy = env.VITE_WAYFINDER_ROUTING_STRATEGY as
+        | "random"
+        | "fastest-ping"
+        | "round-robin"
+        | "static"
+        | "preferred-fallback";
+      if (
+        [
+          "random",
+          "fastest-ping",
+          "round-robin",
+          "static",
+          "preferred-fallback",
+        ].includes(strategy)
+      ) {
+        this.config.routing.strategy.strategy = strategy;
       }
     }
 
     if (env.VITE_WAYFINDER_STATIC_ROUTING_GATEWAY) {
-      this.config.staticRoutingGateway = env.VITE_WAYFINDER_STATIC_ROUTING_GATEWAY
+      this.config.routing.strategy.staticGateway =
+        env.VITE_WAYFINDER_STATIC_ROUTING_GATEWAY;
     }
 
     if (env.VITE_WAYFINDER_PREFERRED_GATEWAY) {
-      this.config.preferredGateway = env.VITE_WAYFINDER_PREFERRED_GATEWAY
+      this.config.routing.strategy.preferredGateway =
+        env.VITE_WAYFINDER_PREFERRED_GATEWAY;
     }
 
     if (env.VITE_WAYFINDER_ROUTING_TIMEOUT) {
-      const timeout = parseInt(env.VITE_WAYFINDER_ROUTING_TIMEOUT)
+      const timeout = parseInt(env.VITE_WAYFINDER_ROUTING_TIMEOUT);
       if (!isNaN(timeout) && timeout > 0) {
-        this.config.routingTimeoutMs = timeout
+        this.config.routing.strategy.timeoutMs = timeout;
       }
     }
 
+    // Verification configuration
+    if (env.VITE_WAYFINDER_ENABLE_VERIFICATION === "false") {
+      this.config.verification.enabled = false;
+    } else if (env.VITE_WAYFINDER_ENABLE_VERIFICATION === "true") {
+      this.config.verification.enabled = true;
+    }
+
+    if (env.VITE_WAYFINDER_VERIFICATION_STRATEGY) {
+      const strategy = env.VITE_WAYFINDER_VERIFICATION_STRATEGY as
+        | "hash"
+        | "none";
+      if (["hash", "none"].includes(strategy)) {
+        this.config.verification.strategy = strategy;
+      }
+    }
+
+    // Verification provider configuration
+    if (env.VITE_WAYFINDER_VERIFICATION_PROVIDER) {
+      const provider = env.VITE_WAYFINDER_VERIFICATION_PROVIDER as
+        | "network"
+        | "static"
+        | "simple-cache";
+      if (["network", "static", "simple-cache"].includes(provider)) {
+        this.config.verification.gatewayProvider.type = provider;
+      }
+    }
+
+    if (env.VITE_WAYFINDER_VERIFICATION_GATEWAY_LIMIT) {
+      const limit = parseInt(env.VITE_WAYFINDER_VERIFICATION_GATEWAY_LIMIT);
+      if (
+        !isNaN(limit) &&
+        limit > 0 &&
+        this.config.verification.gatewayProvider.type === "network"
+      ) {
+        (
+          this.config.verification.gatewayProvider
+            .config as NetworkProviderConfig
+        ).limit = limit;
+      }
+    }
+
+    if (
+      env.VITE_WAYFINDER_VERIFICATION_STATIC_GATEWAYS ||
+      env.VITE_WAYFINDER_TRUSTED_GATEWAYS
+    ) {
+      const gateways = (
+        env.VITE_WAYFINDER_VERIFICATION_STATIC_GATEWAYS ||
+        env.VITE_WAYFINDER_TRUSTED_GATEWAYS
+      )
+        .split(",")
+        .map((g: string) => g.trim());
+      if (this.config.verification.gatewayProvider.type === "static") {
+        (
+          this.config.verification.gatewayProvider
+            .config as StaticProviderConfig
+        ).gateways = gateways;
+      }
+    }
+
+    if (env.VITE_WAYFINDER_VERIFICATION_TIMEOUT) {
+      const timeout = parseInt(env.VITE_WAYFINDER_VERIFICATION_TIMEOUT);
+      if (!isNaN(timeout) && timeout > 0) {
+        this.config.verification.timeoutMs = timeout;
+      }
+    }
+
+    // Cache configuration (applies to cache providers)
+    if (env.VITE_WAYFINDER_CACHE_TIMEOUT) {
+      const timeout = parseInt(env.VITE_WAYFINDER_CACHE_TIMEOUT);
+      if (!isNaN(timeout) && timeout > 0) {
+        // Apply to both routing and verification cache providers if applicable
+        if (this.config.routing.gatewayProvider.type === "simple-cache") {
+          (
+            this.config.routing.gatewayProvider.config as CacheProviderConfig
+          ).cacheTimeoutMinutes = timeout;
+        }
+        if (this.config.verification.gatewayProvider.type === "simple-cache") {
+          (
+            this.config.verification.gatewayProvider
+              .config as CacheProviderConfig
+          ).cacheTimeoutMinutes = timeout;
+        }
+      }
+    }
   }
 
   /**
    * Validate configuration for consistency and correctness
    */
   private validateConfiguration(): void {
-    const config = this.config
+    const config = this.config;
 
-    // No additional validation needed - single master switch controls everything
-
-    // Validate gateway provider configuration
-    if (config.gatewayProvider === 'static' && (!config.staticGateways || config.staticGateways.length === 0)) {
-      logger.warn('Static gateway provider selected but no static gateways configured, using fallback gateways')
-      config.staticGateways = config.fallbackGateways
+    // Validate routing provider configuration
+    if (config.routing.gatewayProvider.type === "static") {
+      const staticConfig = config.routing.gatewayProvider
+        .config as StaticProviderConfig;
+      if (!staticConfig.gateways || staticConfig.gateways.length === 0) {
+        logger.warn(
+          "Static gateway provider selected for routing but no gateways configured, using fallback"
+        );
+        staticConfig.gateways = config.fallback.gateways;
+      }
     }
 
-    // Validate verification configuration when Wayfinder is enabled
-    if (config.enableWayfinder && config.verificationStrategy === 'hash' && 
-        (!config.trustedGateways || config.trustedGateways.length === 0)) {
-      logger.warn('Hash verification enabled but no trusted gateways configured, using default trusted gateways')
-      config.trustedGateways = ['https://permagate.io', 'https://vilenarios.com']
+    // Validate verification provider configuration
+    if (
+      config.verification.enabled &&
+      config.verification.gatewayProvider.type === "static"
+    ) {
+      const staticConfig = config.verification.gatewayProvider
+        .config as StaticProviderConfig;
+      if (!staticConfig.gateways || staticConfig.gateways.length === 0) {
+        logger.warn(
+          "Static gateway provider selected for verification but no gateways configured, using defaults"
+        );
+        staticConfig.gateways = [
+          "https://permagate.io",
+          "https://vilenarios.com",
+        ];
+      }
+    }
+
+    // Validate routing strategy specific configs
+    if (
+      config.routing.strategy.strategy === "static" &&
+      !config.routing.strategy.staticGateway
+    ) {
+      config.routing.strategy.staticGateway = "https://arweave.net";
+    }
+
+    if (
+      config.routing.strategy.strategy === "preferred-fallback" &&
+      !config.routing.strategy.preferredGateway
+    ) {
+      config.routing.strategy.preferredGateway = "https://arweave.net";
     }
 
     // Validate numeric values
-    if (config.gatewayLimit <= 0) {
-      config.gatewayLimit = 5
-    }
-
-    if (config.verificationTimeoutMs <= 0) {
-      config.verificationTimeoutMs = 20000
-    }
-
-    if (config.cacheTimeoutMinutes <= 0) {
-      config.cacheTimeoutMinutes = 1
+    if (config.verification.timeoutMs <= 0) {
+      config.verification.timeoutMs = 20000;
     }
   }
 
   /**
    * Create gateway provider based on configuration
    */
-  private createGatewayProvider() {
-    if (!this.config.enableWayfinder) {
-      return new StaticGatewaysProvider({
-        gateways: this.config.fallbackGateways
-      })
-    }
+  private createGatewayProvider(providerConfig: GatewayProviderConfig): any {
+    logger.info(`Creating gateway provider of type: ${providerConfig.type}`);
+    logger.info("Provider config:", JSON.stringify(providerConfig, null, 2));
 
-    switch (this.config.gatewayProvider) {
-      case 'network':
-        return new SimpleCacheGatewaysProvider({
-          ttlSeconds: 60 * 60, // Cache for 1 hour to minimize network requests
-          gatewaysProvider: new NetworkGatewaysProvider({
-            ario: this.createArioInstance(),
-            sortBy: 'operatorStake',
-            sortOrder: 'desc',
-            limit: this.config.gatewayLimit,
-          }),
-        })
+    switch (providerConfig.type) {
+      case "network": {
+        const config = providerConfig.config as NetworkProviderConfig;
+        logger.info(
+          `Creating NetworkGatewaysProvider with sortBy: ${config.sortBy}, sortOrder: ${config.sortOrder}, limit: ${config.limit}`
+        );
+        return new NetworkGatewaysProvider({
+          ario: this.createArioInstance(),
+          sortBy: config.sortBy,
+          sortOrder: config.sortOrder,
+          limit: config.limit,
+        });
+      }
 
-      case 'static':
+      case "static": {
+        const config = providerConfig.config as StaticProviderConfig;
+        logger.info(
+          `Creating StaticGatewaysProvider with gateways: ${config.gateways.join(", ")}`
+        );
         return new StaticGatewaysProvider({
-          gateways: this.config.staticGateways
-        })
+          gateways: config.gateways,
+        });
+      }
 
-      case 'simple-cache':
+      case "simple-cache": {
+        const config = providerConfig.config as CacheProviderConfig;
+        logger.info(
+          `Creating SimpleCacheGatewaysProvider with TTL: ${config.cacheTimeoutMinutes} minutes, wrapped provider: ${config.wrappedProvider}`
+        );
+        const wrappedProvider: any = this.createGatewayProvider({
+          type: config.wrappedProvider,
+          config: config.wrappedProviderConfig,
+        } as GatewayProviderConfig);
+
         return new SimpleCacheGatewaysProvider({
-          ttlSeconds: this.config.cacheTimeoutMinutes * 60,
-          gatewaysProvider: new NetworkGatewaysProvider({
-            ario: this.createArioInstance(),
-            sortBy: 'operatorStake',
-            sortOrder: 'desc',
-            limit: this.config.gatewayLimit,
-          }),
-        })
+          ttlSeconds: config.cacheTimeoutMinutes * 60,
+          gatewaysProvider: wrappedProvider,
+        });
+      }
 
       default:
+        logger.warn(
+          `Unknown gateway provider type: ${providerConfig}, falling back to static with fallback gateways`
+        );
+        // Fallback to static provider with default gateways
         return new StaticGatewaysProvider({
-          gateways: this.config.fallbackGateways
-        })
+          gateways: this.config.fallback.gateways,
+        });
     }
   }
 
@@ -523,66 +610,138 @@ class WayfinderService {
   private createArioInstance() {
     // The new SDK handles AO connection internally
     // Cast to any to handle type mismatch between SDK versions
-    return ARIO.mainnet() as any
+    return ARIO.mainnet() as any;
   }
 
   /**
    * Create routing strategy based on configuration
    */
-  private createRoutingStrategy() {
-    switch (this.config.routingStrategy) {
-      case 'random':
-        return new AvoidRepeatRandomRoutingStrategy()
-        
-      case 'static':
+  private async createRoutingStrategy(gatewayProvider?: any) {
+    const { strategy } = this.config.routing.strategy;
+    logger.info(`Creating routing strategy: ${strategy}`);
+    logger.info(
+      "Strategy config:",
+      JSON.stringify(this.config.routing.strategy, null, 2)
+    );
+
+    switch (strategy) {
+      case "random":
+        logger.info("Using RandomRoutingStrategy");
+        return new RandomRoutingStrategy();
+
+      case "static":
+        const staticGateway =
+          this.config.routing.strategy.staticGateway || "https://arweave.net";
+        logger.info(
+          `Using StaticRoutingStrategy with gateway: ${staticGateway}`
+        );
         return new StaticRoutingStrategy({
-          gateway: this.config.staticRoutingGateway || 'https://arweave.net'
-        })
-        
-      case 'fastest-ping':
+          gateway: staticGateway,
+        });
+
+      case "fastest-ping":
+        const timeoutMs = this.config.routing.strategy.timeoutMs || 500;
+        logger.info(
+          `Using FastestPingRoutingStrategy with timeout: ${timeoutMs}ms`
+        );
         return new FastestPingRoutingStrategy({
-          timeoutMs: this.config.routingTimeoutMs || 500
-        })
-        
-      case 'round-robin':
-        // RoundRobinRoutingStrategy expects URL objects
-        const gateways = this.config.staticGateways.map(url => new URL(url))
-        return new RoundRobinRoutingStrategy({
-          gateways: gateways.length > 0 ? gateways : [new URL('https://arweave.net')]
-        })
-        
-      case 'preferred-fallback':
-        // Create a custom preferred-fallback strategy
-        return new PreferredFallbackRoutingStrategy(this.config.preferredGateway || 'https://arweave.net')
-        
+          timeoutMs,
+        });
+
+      case "round-robin":
+        // Get gateways from the provider if available
+        let gateways: URL[];
+        if (gatewayProvider) {
+          try {
+            gateways = await gatewayProvider.getGateways();
+            logger.info(
+              `Using ${gateways.length} gateways from provider for round-robin`
+            );
+          } catch (error) {
+            logger.warn(
+              "Failed to get gateways from provider, using fallback:",
+              error
+            );
+            gateways = this.config.fallback.gateways.map((url) => new URL(url));
+          }
+        } else {
+          gateways = this.config.fallback.gateways.map((url) => new URL(url));
+        }
+        logger.info(
+          "Round-robin gateways:",
+          gateways.map((g) => g.toString()).join(", ")
+        );
+        return new RoundRobinRoutingStrategy({ gateways });
+
+      case "preferred-fallback":
+        // Use static routing strategy for preferred gateway since SDK doesn't have preferred-fallback
+        const preferredGateway =
+          this.config.routing.strategy.preferredGateway ||
+          "https://arweave.net";
+        logger.info(
+          `Using StaticRoutingStrategy for preferred gateway: ${preferredGateway}`
+        );
+        return new StaticRoutingStrategy({
+          gateway: preferredGateway,
+        });
+
       default:
-        return new AvoidRepeatRandomRoutingStrategy()
+        logger.warn(
+          `Unknown routing strategy: ${strategy}, falling back to RandomRoutingStrategy`
+        );
+        return new RandomRoutingStrategy();
     }
   }
 
   /**
    * Create verification strategy based on configuration
    */
-  private createVerificationStrategy() {
-    if (!this.config.enableWayfinder || this.config.verificationStrategy === 'none') {
-      logger.info('Verification strategy: disabled (none or Wayfinder disabled)')
-      return undefined
+  private async createVerificationStrategy() {
+    if (
+      !this.config.verification.enabled ||
+      this.config.verification.strategy === "none"
+    ) {
+      logger.info("Verification strategy: disabled");
+      return undefined;
     }
 
-    switch (this.config.verificationStrategy) {
-      case 'hash':
-        logger.info(`Verification strategy: hash with trusted gateways: ${this.config.trustedGateways.join(', ')}`)
+    logger.info(
+      `Creating verification strategy: ${this.config.verification.strategy}`
+    );
+    logger.info(
+      "Verification config:",
+      JSON.stringify(this.config.verification, null, 2)
+    );
+
+    // Create gateway provider for verification
+    logger.info("Creating verification gateway provider...");
+    const verificationGatewayProvider = this.createGatewayProvider(
+      this.config.verification.gatewayProvider
+    );
+
+    // Get the list of gateways for verification
+    const verificationGateways =
+      await verificationGatewayProvider.getGateways();
+    logger.info(
+      `Verification gateways available (${verificationGateways.length}):`,
+      verificationGateways.map((g: URL) => g.toString()).join(", ")
+    );
+
+    switch (this.config.verification.strategy) {
+      case "hash":
+        logger.info(
+          `Creating HashVerificationStrategy with ${verificationGateways.length} trusted gateways`
+        );
         return new HashVerificationStrategy({
-          trustedGateways: this.config.trustedGateways.map(url => {
-            // Ensure URL doesn't have trailing slash and is properly formatted
-            const cleanUrl = url.endsWith('/') ? url.slice(0, -1) : url
-            return new URL(cleanUrl)
-          })
-        })
+          trustedGateways: verificationGateways,
+        });
 
       default:
-        logger.warn('Unknown verification strategy:', this.config.verificationStrategy)
-        return undefined
+        logger.warn(
+          "Unknown verification strategy:",
+          this.config.verification.strategy
+        );
+        return undefined;
     }
   }
 
@@ -592,15 +751,23 @@ class WayfinderService {
   private shouldAutoFetch(contentType: string, size: number): boolean {
     // Size thresholds from constants
     const IMAGE_THRESHOLD = 25 * 1024 * 1024; // 25MB
-    const VIDEO_THRESHOLD = 200 * 1024 * 1024; // 200MB  
+    const VIDEO_THRESHOLD = 200 * 1024 * 1024; // 200MB
     const AUDIO_THRESHOLD = 50 * 1024 * 1024; // 50MB
     const TEXT_THRESHOLD = 10 * 1024 * 1024; // 10MB
 
-    if (contentType.startsWith('image/') && size > IMAGE_THRESHOLD) return false;
-    if (contentType.startsWith('video/') && size > VIDEO_THRESHOLD) return false;
-    if (contentType.startsWith('audio/') && size > AUDIO_THRESHOLD) return false;
-    if ((contentType.startsWith('text/') || ['text/plain', 'text/markdown'].includes(contentType)) && size > TEXT_THRESHOLD) return false;
-    
+    if (contentType.startsWith("image/") && size > IMAGE_THRESHOLD)
+      return false;
+    if (contentType.startsWith("video/") && size > VIDEO_THRESHOLD)
+      return false;
+    if (contentType.startsWith("audio/") && size > AUDIO_THRESHOLD)
+      return false;
+    if (
+      (contentType.startsWith("text/") ||
+        ["text/plain", "text/markdown"].includes(contentType)) &&
+      size > TEXT_THRESHOLD
+    )
+      return false;
+
     return true;
   }
 
@@ -611,15 +778,25 @@ class WayfinderService {
    * @param forceLoad Force loading even for large files
    * @param preload If true, only returns cached content or URL without verification
    */
-  async getContentUrl(request: ContentRequest, forceLoad: boolean = false, preload: boolean = false): Promise<ContentResponse> {
-    const { txId, path = '', contentType, size } = request
-    const cacheKey = `${txId}${path}`
+  async getContentUrl(
+    request: ContentRequest,
+    forceLoad: boolean = false,
+    preload: boolean = false
+  ): Promise<ContentResponse> {
+    const { txId, path = "", contentType, size } = request;
+    const cacheKey = `${txId}${path}`;
 
     // Check if we should auto-fetch based on size thresholds
-    if (!forceLoad && contentType && size && !this.shouldAutoFetch(contentType, size)) {
+    if (
+      !forceLoad &&
+      contentType &&
+      size &&
+      !this.shouldAutoFetch(contentType, size)
+    ) {
       // Return URL-only response for large files (will show manual load button)
-      const fallbackGateway = this.config.fallbackGateways[0] || determineFallbackGateway()
-      const url = `${fallbackGateway}/${txId}${path}`
+      const fallbackGateway =
+        this.config.fallback.gateways[0] || determineFallbackGateway();
+      const url = `${fallbackGateway}/${txId}${path}`;
 
       return {
         url,
@@ -627,22 +804,23 @@ class WayfinderService {
         verified: false,
         verificationStatus: {
           txId,
-          status: 'not-verified',
-          timestamp: Date.now()
+          status: "not-verified",
+          timestamp: Date.now(),
         },
         data: null, // No data for large files unless forced
         contentType: contentType || null,
-        fromCache: false
-      }
+        fromCache: false,
+      };
     }
 
     // Check content cache first for full content (verified data)
-    const contentCached = this.contentCache.get(cacheKey)
-    if (contentCached && Date.now() - contentCached.timestamp < this.config.cacheTimeoutMinutes * 60 * 1000) {
+    const contentCached = this.contentCache.get(cacheKey);
+    const cacheTimeout = 60 * 60 * 1000; // 1 hour cache
+    if (contentCached && Date.now() - contentCached.timestamp < cacheTimeout) {
       // Always get the most current verification status from memory
-      const currentVerificationStatus = this.getVerificationStatus(txId)
-      const isVerified = currentVerificationStatus.status === 'verified'
-      
+      const currentVerificationStatus = this.getVerificationStatus(txId);
+      const isVerified = currentVerificationStatus.status === "verified";
+
       return {
         url: contentCached.url,
         gateway: contentCached.gateway,
@@ -650,16 +828,16 @@ class WayfinderService {
         verificationStatus: currentVerificationStatus,
         data: contentCached.data,
         contentType: contentCached.contentType,
-        fromCache: true
-      }
+        fromCache: true,
+      };
     }
 
     // Check URL cache for metadata-only response
-    const urlCached = this.urlCache.get(cacheKey)
-    if (urlCached && Date.now() - urlCached.timestamp < this.config.cacheTimeoutMinutes * 60 * 1000) {
-      const currentVerificationStatus = this.getVerificationStatus(txId)
-      const isVerified = currentVerificationStatus.status === 'verified'
-      
+    const urlCached = this.urlCache.get(cacheKey);
+    if (urlCached && Date.now() - urlCached.timestamp < cacheTimeout) {
+      const currentVerificationStatus = this.getVerificationStatus(txId);
+      const isVerified = currentVerificationStatus.status === "verified";
+
       return {
         url: urlCached.url,
         gateway: urlCached.gateway,
@@ -667,120 +845,135 @@ class WayfinderService {
         verificationStatus: currentVerificationStatus,
         data: null, // No data in URL-only cache
         contentType: null, // Will be determined by caller
-        fromCache: true
-      }
+        fromCache: true,
+      };
     }
 
     // If preloading, return URL without verification
     if (preload) {
-      const fallbackGateway = this.config.fallbackGateways[0] || determineFallbackGateway()
-      const url = `${fallbackGateway}/${txId}${path}`
-      
+      const fallbackGateway =
+        this.config.fallback.gateways[0] || determineFallbackGateway();
+      const url = `${fallbackGateway}/${txId}${path}`;
+
       return {
         url,
         gateway: fallbackGateway,
         verified: false,
         verificationStatus: {
           txId,
-          status: 'not-verified',
-          timestamp: Date.now()
+          status: "not-verified",
+          timestamp: Date.now(),
         },
         data: null,
         contentType: contentType || null,
-        fromCache: false
-      }
+        fromCache: false,
+      };
     }
 
     // Initialize if needed
-    await this.initialize()
+    await this.initialize();
 
-    // Try Wayfinder if enabled  
+    // Try Wayfinder if enabled
     if (this.wayfinder && this.config.enableWayfinder) {
       try {
-        const arUrl = `ar://${txId}${path}`
-        
+        const arUrl = `ar://${txId}${path}`;
+        logger.info(`Wayfinder request for ${txId} - URL: ${arUrl}`);
+
         // Set initial verification status
         this.setVerificationStatus(txId, {
           txId,
-          status: 'verifying',
-          timestamp: Date.now()
-        })
+          status: "verifying",
+          timestamp: Date.now(),
+        });
 
         // Start verification event
         this.handleVerificationEvent({
-          type: 'verification-started',
+          type: "verification-started",
           txId,
-          timestamp: Date.now()
-        })
+          timestamp: Date.now(),
+        });
 
         // Set up verification timeout as a safety net
-        if (this.config.enableWayfinder && this.config.verificationTimeoutMs > 0) {
+        if (
+          this.config.verification.enabled &&
+          this.config.verification.timeoutMs > 0
+        ) {
           setTimeout(() => {
-            const currentStatus = this.getVerificationStatus(txId)
-            if (currentStatus.status === 'verifying') {
-              logger.warn(`Verification timeout for ${txId} after ${this.config.verificationTimeoutMs}ms`)
+            const currentStatus = this.getVerificationStatus(txId);
+            if (currentStatus.status === "verifying") {
+              logger.warn(
+                `Verification timeout for ${txId} after ${this.config.verification.timeoutMs}ms`
+              );
               this.setVerificationStatus(txId, {
                 txId,
-                status: 'failed',
-                error: 'Verification timeout',
-                timestamp: Date.now()
-              })
-              
+                status: "failed",
+                error: "Verification timeout",
+                timestamp: Date.now(),
+              });
+
               // Notify listeners of timeout
               this.handleVerificationEvent({
-                type: 'verification-failed',
+                type: "verification-failed",
                 txId,
-                error: 'Verification timeout',
-                timestamp: Date.now()
-              })
+                error: "Verification timeout",
+                timestamp: Date.now(),
+              });
             }
-          }, this.config.verificationTimeoutMs)
+          }, this.config.verification.timeoutMs);
         }
 
         // Use request() method like the example
-        const response = await this.wayfinder.request(arUrl)
-        
+        logger.info("Making Wayfinder request...");
+        const response = await this.wayfinder.request(arUrl);
+        logger.info(`Wayfinder response received from: ${response.url}`);
+
         // Extract URL and content info from response
-        const gatewayUrl = response.url
-        const gateway = this.extractGatewayFromUrl(gatewayUrl)
-        const contentType = response.headers.get('content-type') || 'application/octet-stream'
-        
+        const gatewayUrl = response.url;
+        const gateway = this.extractGatewayFromUrl(gatewayUrl);
+        const contentType =
+          response.headers.get("content-type") || "application/octet-stream";
+
+        logger.info(
+          `Response details - Gateway: ${gateway}, Content-Type: ${contentType}`
+        );
+
         // Handle content based on type to ensure proper verification completion
-        let data: Blob
+        let data: Blob;
         try {
-          if (contentType.startsWith('image/') || 
-              contentType.startsWith('video/') || 
-              contentType.startsWith('audio/') ||
-              contentType === 'application/pdf' ||
-              contentType.includes('octet-stream')) {
+          if (
+            contentType.startsWith("image/") ||
+            contentType.startsWith("video/") ||
+            contentType.startsWith("audio/") ||
+            contentType === "application/pdf" ||
+            contentType.includes("octet-stream")
+          ) {
             // Handle binary content - use blob() to complete stream and trigger verification
-            data = await response.blob()
-          } else if (contentType.startsWith('application/json')) {
+            data = await response.blob();
+          } else if (contentType.startsWith("application/json")) {
             // Handle JSON content
-            const jsonData = await response.json()
-            data = new Blob([JSON.stringify(jsonData)], {type: contentType})
+            const jsonData = await response.json();
+            data = new Blob([JSON.stringify(jsonData)], { type: contentType });
           } else {
             // Handle text content (HTML, plain text, etc.)
-            const textData = await response.text()
-            data = new Blob([textData], {type: contentType})
+            const textData = await response.text();
+            data = new Blob([textData], { type: contentType });
           }
-          
+
           // The verification hash will come from the trusted gateways via verification events
-          
-          // Note: We only want to display the x-ar-io-digest from trusted gateways, 
+
+          // Note: We only want to display the x-ar-io-digest from trusted gateways,
           // not self-computed hashes. The verification hash should come from the verification events.
-          
         } catch (error) {
-          logger.error(`Failed to process content for ${txId}:`, error)
-          throw error
+          logger.error(`Failed to process content for ${txId}:`, error);
+          throw error;
         }
-        
+
         // Cache both URL and full content
         this.urlCache.set(cacheKey, {
           url: gatewayUrl,
           timestamp: Date.now(),
-          gateway
-        })
+          gateway,
+        });
 
         // Cache the verified content for future use
         this.contentCache.set(cacheKey, {
@@ -791,19 +984,19 @@ class WayfinderService {
           verified: false, // Will be updated by verification events
           verificationStatus: this.getVerificationStatus(txId),
           timestamp: Date.now(),
-          size: data.size
-        })
+          size: data.size,
+        });
 
         // Set initial status - verification will be updated via events
         this.setVerificationStatus(txId, {
           txId,
-          status: 'verifying',
+          status: "verifying",
           gateway,
-          timestamp: Date.now()
-        })
+          timestamp: Date.now(),
+        });
 
         // Trigger cache cleanup periodically (every 5 minutes)
-        this.maybeCleanupCaches()
+        this.maybeCleanupCaches();
 
         return {
           url: gatewayUrl,
@@ -812,109 +1005,119 @@ class WayfinderService {
           verificationStatus: this.getVerificationStatus(txId),
           contentType,
           data,
-          fromCache: false
-        }
+          fromCache: false,
+        };
       } catch (error) {
-        logger.warn('Wayfinder request failed, falling back to original gateway:', error)
-        
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        logger.warn(
+          "Wayfinder request failed, falling back to original gateway:",
+          error
+        );
+
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
         this.setVerificationStatus(txId, {
           txId,
-          status: 'failed',
+          status: "failed",
           error: errorMessage,
-          timestamp: Date.now()
-        })
-        
+          timestamp: Date.now(),
+        });
+
         // Notify listeners of failure
         this.handleVerificationEvent({
-          type: 'verification-failed',
+          type: "verification-failed",
           txId,
           error: errorMessage,
-          timestamp: Date.now()
-        })
-        
+          timestamp: Date.now(),
+        });
+
         // Return fallback on error
-        return this.getFallbackContentUrl(request)
+        return this.getFallbackContentUrl(request);
       }
     }
 
     // Fallback to original gateway logic
-    return this.getFallbackContentUrl(request)
+    return this.getFallbackContentUrl(request);
   }
 
   /**
    * Fallback to original gateway system
    */
   private getFallbackContentUrl(request: ContentRequest): ContentResponse {
-    const { txId, path = '' } = request
-    
+    const { txId, path = "" } = request;
+
     // Use the hostname-based fallback gateway detection
     // This ensures fallback uses the same gateway serving the Roam app
-    const fallbackGateway = this.config.fallbackGateways[0] || determineFallbackGateway()
-    const url = `${fallbackGateway}/${txId}${path}`
+    const fallbackGateway =
+      this.config.fallback.gateways[0] || determineFallbackGateway();
+    const url = `${fallbackGateway}/${txId}${path}`;
 
     // Only set to 'not-verified' if there's no existing verification status
     // This preserves verified status for content that was previously verified
-    const currentStatus = this.getVerificationStatus(txId)
-    if (currentStatus.status === 'pending') {
+    const currentStatus = this.getVerificationStatus(txId);
+    if (currentStatus.status === "pending") {
       this.setVerificationStatus(txId, {
         txId,
-        status: 'not-verified',
+        status: "not-verified",
         gateway: fallbackGateway,
-        timestamp: Date.now()
-      })
+        timestamp: Date.now(),
+      });
     }
 
-    const finalStatus = this.getVerificationStatus(txId)
+    const finalStatus = this.getVerificationStatus(txId);
     return {
       url,
       gateway: fallbackGateway,
-      verified: finalStatus.status === 'verified',
+      verified: finalStatus.status === "verified",
       verificationStatus: finalStatus,
       data: null,
       contentType: null,
-      fromCache: false
-    }
+      fromCache: false,
+    };
   }
 
   /**
    * Check if Wayfinder is available and working
    */
   async isAvailable(): Promise<boolean> {
-    await this.initialize()
-    return this.wayfinder !== null && this.config.enableWayfinder
+    await this.initialize();
+    return this.wayfinder !== null && this.config.enableWayfinder;
   }
 
   /**
    * Get verification status for a transaction
    */
   getVerificationStatus(txId: string): VerificationStatus {
-    return this.verificationStatuses.get(txId) || {
-      txId,
-      status: 'pending',
-      timestamp: Date.now()
-    }
+    return (
+      this.verificationStatuses.get(txId) || {
+        txId,
+        status: "pending",
+        timestamp: Date.now(),
+      }
+    );
   }
 
   /**
    * Set verification status for a transaction
    */
-  private setVerificationStatus(txId: string, status: VerificationStatus): void {
-    this.verificationStatuses.set(txId, status)
+  private setVerificationStatus(
+    txId: string,
+    status: VerificationStatus
+  ): void {
+    this.verificationStatuses.set(txId, status);
   }
 
   /**
    * Add event listener for verification events
    */
   addEventListener(listener: (event: VerificationEvent) => void): void {
-    this.eventListeners.add(listener)
+    this.eventListeners.add(listener);
   }
 
   /**
    * Remove event listener
    */
   removeEventListener(listener: (event: VerificationEvent) => void): void {
-    this.eventListeners.delete(listener)
+    this.eventListeners.delete(listener);
   }
 
   /**
@@ -922,55 +1125,55 @@ class WayfinderService {
    */
   private handleVerificationEvent(event: VerificationEvent): void {
     // Update verification status based on event type
-    const currentStatus = this.getVerificationStatus(event.txId)
-    
+    const currentStatus = this.getVerificationStatus(event.txId);
+
     switch (event.type) {
-      case 'verification-started':
+      case "verification-started":
         this.setVerificationStatus(event.txId, {
           ...currentStatus,
-          status: 'verifying'
-        })
-        break
-      case 'verification-completed':
-        logger.info(`Verification completed for ${event.txId}`)
+          status: "verifying",
+        });
+        break;
+      case "verification-completed":
+        logger.info(`Verification completed for ${event.txId}`);
         this.setVerificationStatus(event.txId, {
           ...currentStatus,
-          status: 'verified',
+          status: "verified",
           gateway: event.gateway,
-          verificationMethod: 'hash'
-        })
-        
+          verificationMethod: "hash",
+        });
+
         // Update cached content verification status
         for (const [cacheKey, cached] of this.contentCache.entries()) {
           if (cacheKey.startsWith(event.txId)) {
-            cached.verified = true
-            cached.verificationStatus = this.getVerificationStatus(event.txId)
+            cached.verified = true;
+            cached.verificationStatus = this.getVerificationStatus(event.txId);
           }
         }
-        break
-      case 'verification-failed':
+        break;
+      case "verification-failed":
         this.setVerificationStatus(event.txId, {
           ...currentStatus,
-          status: 'failed',
-          error: event.error
-        })
-        break
-      case 'routing-succeeded':
+          status: "failed",
+          error: event.error,
+        });
+        break;
+      case "routing-succeeded":
         this.setVerificationStatus(event.txId, {
           ...currentStatus,
-          gateway: event.gateway
-        })
-        break
+          gateway: event.gateway,
+        });
+        break;
     }
 
     // Notify all listeners
-    this.eventListeners.forEach(listener => {
+    this.eventListeners.forEach((listener) => {
       try {
-        listener(event)
+        listener(event);
       } catch (error) {
-        logger.warn('Error in verification event listener:', error)
+        logger.warn("Error in verification event listener:", error);
       }
-    })
+    });
   }
 
   /**
@@ -978,10 +1181,10 @@ class WayfinderService {
    */
   private extractGatewayFromUrl(url: string): string {
     try {
-      const urlObj = new URL(url)
-      return `${urlObj.protocol}//${urlObj.host}`
+      const urlObj = new URL(url);
+      return `${urlObj.protocol}//${urlObj.host}`;
     } catch {
-      return 'unknown'
+      return "unknown";
     }
   }
 
@@ -989,21 +1192,21 @@ class WayfinderService {
    * Clear all caches
    */
   clearCache(): void {
-    this.urlCache.clear()
-    this.contentCache.clear()
-    this.verificationStatuses.clear()
+    this.urlCache.clear();
+    this.contentCache.clear();
+    this.verificationStatuses.clear();
   }
 
   /**
    * Clean up caches only if enough time has passed (throttled)
    */
   private maybeCleanupCaches(): void {
-    const now = Date.now()
-    const cleanupInterval = 5 * 60 * 1000 // 5 minutes
-    
+    const now = Date.now();
+    const cleanupInterval = 5 * 60 * 1000; // 5 minutes
+
     if (now - this.lastCleanup > cleanupInterval) {
-      this.cleanupCaches()
-      this.lastCleanup = now
+      this.cleanupCaches();
+      this.lastCleanup = now;
     }
   }
 
@@ -1011,32 +1214,33 @@ class WayfinderService {
    * Clean up old cache entries based on TTL and size limits
    */
   private cleanupCaches(): void {
-    const now = Date.now()
-    const maxAge = this.config.cacheTimeoutMinutes * 60 * 1000
-    const maxCacheSize = 50 // Maximum number of cached items
+    const now = Date.now();
+    const maxAge = 60 * 60 * 1000; // Default to 1 hour cache
+    const maxCacheSize = 50; // Maximum number of cached items
 
     // Clean expired entries
     for (const [key, content] of this.contentCache.entries()) {
       if (now - content.timestamp > maxAge) {
-        this.contentCache.delete(key)
+        this.contentCache.delete(key);
       }
     }
 
     // Clean URL cache too
     for (const [key, cached] of this.urlCache.entries()) {
       if (now - cached.timestamp > maxAge) {
-        this.urlCache.delete(key)
+        this.urlCache.delete(key);
       }
     }
 
     // If still too many entries, remove oldest ones (LRU)
     if (this.contentCache.size > maxCacheSize) {
-      const entries = Array.from(this.contentCache.entries())
-        .sort((a, b) => a[1].timestamp - b[1].timestamp) // Sort by timestamp (oldest first)
-      
-      const toRemove = entries.slice(0, entries.length - maxCacheSize)
+      const entries = Array.from(this.contentCache.entries()).sort(
+        (a, b) => a[1].timestamp - b[1].timestamp
+      ); // Sort by timestamp (oldest first)
+
+      const toRemove = entries.slice(0, entries.length - maxCacheSize);
       for (const [key] of toRemove) {
-        this.contentCache.delete(key)
+        this.contentCache.delete(key);
       }
     }
   }
@@ -1045,76 +1249,68 @@ class WayfinderService {
    * Update configuration dynamically
    */
   updateConfig(newConfig: Partial<WayfinderConfig>): void {
-    const oldConfig = { ...this.config }
-    
-    // Check if we're switching to network provider
-    const switchingToNetwork = 
-      (oldConfig.gatewayProvider !== 'network' && oldConfig.gatewayProvider !== 'simple-cache') &&
-      (newConfig.gatewayProvider === 'network' || newConfig.gatewayProvider === 'simple-cache')
-    
-    // For trusted gateways: Only override if explicitly provided OR we're not using network provider
-    if ('trustedGateways' in newConfig && 
-        (this.config.gatewayProvider === 'static' || switchingToNetwork)) {
-      // Allow trusted gateway changes for static provider or when switching to network
-      this.config = { ...this.config, ...newConfig }
-    } else if (!('trustedGateways' in newConfig)) {
-      // Normal config update without trusted gateway changes
-      this.config = { ...this.config, ...newConfig }
-    } else {
-      // Skip trusted gateway override for network provider unless switching
-      const { trustedGateways, ...configWithoutTrustedGateways } = newConfig
-      this.config = { ...this.config, ...configWithoutTrustedGateways }
-      logger.info('Preserving network-fetched trusted gateways, ignoring UI override')
-    }
-    
-    // Handle network provider switch - trigger gateway refresh
-    if (switchingToNetwork) {
-      logger.info('Switching to network provider, will fetch top staked gateways on next initialization')
-      // Mark that we need to refresh trusted gateways
-      this.needsTrustedGatewayRefresh = true
-    }
-    
-    // Save complete configuration to localStorage for persistence
-    localStorage.setItem('wayfinder-config', JSON.stringify({
-      enableWayfinder: this.config.enableWayfinder,
-      gatewayProvider: this.config.gatewayProvider,
-      gatewayLimit: this.config.gatewayLimit,
-      cacheTimeoutMinutes: this.config.cacheTimeoutMinutes,
-      routingStrategy: this.config.routingStrategy,
-      staticRoutingGateway: this.config.staticRoutingGateway,
-      preferredGateway: this.config.preferredGateway,
-      routingTimeoutMs: this.config.routingTimeoutMs,
-      verificationStrategy: this.config.verificationStrategy,
-      verificationTimeoutMs: this.config.verificationTimeoutMs,
-      staticGateways: this.config.staticGateways,
-      trustedGateways: this.config.trustedGateways
-    }))
-    
+    logger.info("Updating Wayfinder configuration...");
+    logger.info("Current config:", JSON.stringify(this.config, null, 2));
+    logger.info("New config updates:", JSON.stringify(newConfig, null, 2));
+
+    const oldConfig = JSON.parse(JSON.stringify(this.config)); // Deep clone
+
+    // Merge the new configuration
+    this.config = {
+      ...this.config,
+      ...newConfig,
+      routing: {
+        ...this.config.routing,
+        ...(newConfig.routing || {}),
+        gatewayProvider:
+          newConfig.routing?.gatewayProvider ||
+          this.config.routing.gatewayProvider,
+        strategy: newConfig.routing?.strategy || this.config.routing.strategy,
+      },
+      verification: {
+        ...this.config.verification,
+        ...(newConfig.verification || {}),
+        gatewayProvider:
+          newConfig.verification?.gatewayProvider ||
+          this.config.verification.gatewayProvider,
+      },
+      fallback: {
+        ...this.config.fallback,
+        ...(newConfig.fallback || {}),
+      },
+    };
+
+    logger.info("Merged config:", JSON.stringify(this.config, null, 2));
+
+    // Save configuration to localStorage for persistence
+    localStorage.setItem("wayfinder-config", JSON.stringify(this.config));
+
     // Check if we need to re-initialize Wayfinder due to significant config changes
-    const needsReinitialization = (
+    const needsReinitialization =
       oldConfig.enableWayfinder !== this.config.enableWayfinder ||
-      oldConfig.gatewayProvider !== this.config.gatewayProvider ||
-      oldConfig.gatewayLimit !== this.config.gatewayLimit ||
-      oldConfig.cacheTimeoutMinutes !== this.config.cacheTimeoutMinutes ||
-      oldConfig.routingStrategy !== this.config.routingStrategy ||
-      oldConfig.staticRoutingGateway !== this.config.staticRoutingGateway ||
-      oldConfig.preferredGateway !== this.config.preferredGateway ||
-      oldConfig.routingTimeoutMs !== this.config.routingTimeoutMs ||
-      oldConfig.verificationStrategy !== this.config.verificationStrategy ||
-      oldConfig.verificationTimeoutMs !== this.config.verificationTimeoutMs ||
-      JSON.stringify(oldConfig.staticGateways) !== JSON.stringify(this.config.staticGateways) ||
-      JSON.stringify(oldConfig.trustedGateways) !== JSON.stringify(this.config.trustedGateways)
-    )
-    
+      JSON.stringify(oldConfig.routing) !==
+        JSON.stringify(this.config.routing) ||
+      JSON.stringify(oldConfig.verification) !==
+        JSON.stringify(this.config.verification);
+
+    logger.info(
+      `Needs reinitialization: ${needsReinitialization}, Currently initialized: ${this.initialized}`
+    );
+
     if (needsReinitialization && this.initialized) {
-      this.initialized = false
-      this.wayfinder = null
-      
+      logger.info("Clearing cache and reinitializing Wayfinder...");
+      this.clearCache(); // Clear cache to ensure fresh routing
+      this.initialized = false;
+      this.wayfinder = null;
+
       // Re-initialize if Wayfinder should be enabled
       if (this.config.enableWayfinder) {
-        this.initialize().catch(error => {
-          logger.error('Failed to re-initialize Wayfinder after config change:', error)
-        })
+        this.initialize().catch((error) => {
+          logger.error(
+            "Failed to re-initialize Wayfinder after config change:",
+            error
+          );
+        });
       }
     }
   }
@@ -1123,7 +1319,7 @@ class WayfinderService {
    * Get current configuration
    */
   getConfig(): WayfinderConfig {
-    return { ...this.config }
+    return { ...this.config };
   }
 
   /**
@@ -1131,73 +1327,68 @@ class WayfinderService {
    */
   private loadPersistedConfig(): Partial<WayfinderConfig> {
     try {
-      const stored = localStorage.getItem('wayfinder-config')
+      const stored = localStorage.getItem("wayfinder-config");
       if (stored) {
-        const parsed = JSON.parse(stored)
-        return {
-          enableWayfinder: parsed.enableWayfinder,
-          gatewayProvider: parsed.gatewayProvider,
-          gatewayLimit: parsed.gatewayLimit,
-          cacheTimeoutMinutes: parsed.cacheTimeoutMinutes,
-          routingStrategy: parsed.routingStrategy,
-          staticRoutingGateway: parsed.staticRoutingGateway,
-          preferredGateway: parsed.preferredGateway,
-          routingTimeoutMs: parsed.routingTimeoutMs,
-          verificationStrategy: parsed.verificationStrategy,
-          verificationTimeoutMs: parsed.verificationTimeoutMs,
-          staticGateways: parsed.staticGateways,
-          trustedGateways: parsed.trustedGateways
+        const parsed = JSON.parse(stored);
+        // Return the parsed config directly if it has the new structure
+        if (parsed.routing && parsed.verification) {
+          return parsed;
         }
+        // Otherwise return empty to use defaults
       }
     } catch (error) {
-      logger.warn('Failed to load persisted Wayfinder config:', error)
+      logger.warn("Failed to load persisted Wayfinder config:", error);
     }
-    return {}
+    return {};
   }
 
   /**
    * Get the current fallback gateway being used
    */
   getFallbackGateway(): string {
-    return this.config.fallbackGateways[0] || determineFallbackGateway()
+    return this.config.fallback.gateways[0] || determineFallbackGateway();
   }
 
   /**
    * Get service statistics with granular configuration details
    */
   getStats() {
-    const totalRequests = this.verificationStatuses.size
-    const verified = Array.from(this.verificationStatuses.values())
-      .filter(s => s.status === 'verified').length
-    const failed = Array.from(this.verificationStatuses.values())
-      .filter(s => s.status === 'failed').length
+    const totalRequests = this.verificationStatuses.size;
+    const verified = Array.from(this.verificationStatuses.values()).filter(
+      (s) => s.status === "verified"
+    ).length;
+    const failed = Array.from(this.verificationStatuses.values()).filter(
+      (s) => s.status === "failed"
+    ).length;
 
     return {
       // Master configuration
       enabled: this.config.enableWayfinder,
       initialized: this.initialized,
       fallbackGateway: this.getFallbackGateway(),
-      
+
       // Provider configuration
-      gatewayProvider: this.config.gatewayProvider,
-      verificationStrategy: this.config.verificationStrategy,
-      
+      routingProvider: this.config.routing.gatewayProvider.type,
+      verificationEnabled: this.config.verification.enabled,
+      verificationProvider: this.config.verification.gatewayProvider.type,
+
       // Performance metrics
       totalRequests,
       verified,
       failed,
-      verificationRate: totalRequests > 0 ? (verified / totalRequests) * 100 : 0,
+      verificationRate:
+        totalRequests > 0 ? (verified / totalRequests) * 100 : 0,
       cacheSize: this.urlCache.size,
-      contentCacheSize: this.contentCache.size
-    }
+      contentCacheSize: this.contentCache.size,
+    };
   }
 }
 
 // Create singleton instance
-export const wayfinderService = new WayfinderService()
+export const wayfinderService = new WayfinderService();
 
 // Export the service class for testing
-export { WayfinderService }
+export { WayfinderService };
 
 // Export the fallback detection function for testing
-export { determineFallbackGateway }
+export { determineFallbackGateway };
