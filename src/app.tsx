@@ -41,6 +41,7 @@ import { useSessionStats } from './hooks/useSessionStats'
 import { useVerificationStatus } from './hooks/useVerificationStatus'
 import { logger } from './utils/logger'
 import { MAX_AD_CLICKS, MIN_AD_CLICKS, DEFAULT_DATE_RANGE_DAYS, APP_SWIPE_THRESHOLD, APP_SWIPE_TIME_LIMIT } from './constants'
+import { WayfinderService } from './services/wayfinder'
 import './styles/app.css'
 import './styles/channels-drawer.css'
 import './styles/welcome-screen.css'
@@ -63,6 +64,21 @@ export function App() {
   const consent = useConsent()
   const deepLink = useDeepLink()
   const appState = useAppState()
+  
+  // Pre-initialize Wayfinder on app startup to spread out the load
+  useEffect(() => {
+    const preInitializeWayfinder = async () => {
+      try {
+        logger.debug('Pre-initializing Wayfinder service...')
+        await WayfinderService.getInstance().initialize()
+        logger.debug('Wayfinder pre-initialization complete')
+      } catch (error) {
+        logger.warn('Wayfinder pre-initialization failed (non-critical):', error)
+      }
+    }
+    
+    preInitializeWayfinder()
+  }, [])
   
   // Date range filtering with block height conversion
   // Allows users to filter content by date ranges, which are converted to Arweave block heights

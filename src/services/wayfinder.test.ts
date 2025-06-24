@@ -10,6 +10,7 @@ vi.mock("@ar.io/sdk", () => ({
           {
             gatewayAddress: "mock-gateway-1.com",
             operatorStake: 1000000,
+            totalDelegatedStake: 5000000,
             status: "joined",
             settings: {
               protocol: "https",
@@ -20,6 +21,7 @@ vi.mock("@ar.io/sdk", () => ({
           {
             gatewayAddress: "mock-gateway-2.com",
             operatorStake: 500000,
+            totalDelegatedStake: 2000000,
             status: "joined",
             settings: {
               protocol: "https",
@@ -47,8 +49,15 @@ vi.mock("@ar.io/wayfinder-core", () => ({
       on: vi.fn(),
     },
   })),
-  NetworkGatewaysProvider: vi.fn(),
-  SimpleCacheGatewaysProvider: vi.fn().mockImplementation(() => ({})),
+  NetworkGatewaysProvider: vi.fn().mockImplementation(() => ({
+    getGateways: vi.fn().mockResolvedValue([
+      new URL("https://mock-gateway-1.com"),
+      new URL("https://mock-gateway-2.com"),
+    ]),
+  })),
+  SimpleCacheGatewaysProvider: vi.fn().mockImplementation(({ gatewaysProvider }) => ({
+    getGateways: gatewaysProvider ? gatewaysProvider.getGateways : vi.fn().mockResolvedValue([]),
+  })),
   StaticGatewaysProvider: vi.fn().mockImplementation(() => ({})),
   HashVerificationStrategy: vi.fn(),
   TrustedGatewaysHashProvider: vi.fn(),

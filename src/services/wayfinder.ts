@@ -12,6 +12,7 @@ import {
 import { ARIO } from "@ar.io/sdk";
 import { logger } from "../utils/logger";
 import { GATEWAY_DATA_SOURCE } from "../engine/fetchQueue";
+import { retryWithBackoff } from "../utils/retry";
 import type {
   WayfinderConfig,
   VerificationStatus,
@@ -149,6 +150,7 @@ class WayfinderService {
   // Note: AR.IO SDK does not currently expose x-ar-io-digest hashes in its public API
   private initialized = false;
   private lastCleanup = 0;
+  private initializationPromise: Promise<void> | null = null;
 
   constructor(config: Partial<WayfinderConfig> = {}) {
     logger.info("Initializing WayfinderService...");
@@ -176,6 +178,11 @@ class WayfinderService {
   }
 
   async initialize(): Promise<void> {
+    // Return existing initialization if in progress
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
+    
     if (this.initialized || !this.config.enableWayfinder) {
       logger.info(
         `Skipping Wayfinder initialization. Initialized: ${this.initialized}, Enabled: ${this.config.enableWayfinder}`
@@ -183,6 +190,17 @@ class WayfinderService {
       return;
     }
 
+    // Create and store the promise
+    this.initializationPromise = this._doInitialize();
+    
+    try {
+      await this.initializationPromise;
+    } finally {
+      this.initializationPromise = null;
+    }
+  }
+
+  private async _doInitialize(): Promise<void> {
     try {
       logger.info(
         "Initializing Wayfinder service with config:",
@@ -195,16 +213,10 @@ class WayfinderService {
         this.config.routing.gatewayProvider
       );
 
-      // Log the gateways available from the provider
-      try {
-        const availableGateways = await routingGatewayProvider.getGateways();
-        logger.info(
-          `Routing gateways available (${availableGateways.length}):`,
-          availableGateways.map((g: URL) => g.toString()).join(", ")
-        );
-      } catch (error) {
-        logger.warn("Failed to get gateways from provider:", error);
-      }
+      // Skip gateway fetching during initialization to avoid unnecessary network calls
+      logger.info(
+        "Gateway provider created. Gateways will be fetched on first content request."
+      );
 
       // Create routing strategy
       logger.info(
@@ -225,51 +237,59 @@ class WayfinderService {
 
       // Initialize Wayfinder - simplified like the example
       logger.info("Creating Wayfinder instance...");
+      
+      // Only register verification events if verification is enabled
+      const events: any = {};
+      if (this.config.verification.enabled) {
+        logger.info("Registering verification event handlers...");
+        events.onVerificationSucceeded = (event: any) => {
+          // Gateway info not available in this event
+          const gateway = "verified";
+          logger.info(`Verification succeeded for ${event.txId}`);
+
+          this.handleVerificationEvent({
+            type: "verification-completed",
+            txId: event.txId,
+            gateway,
+            timestamp: Date.now(),
+          });
+        };
+        
+        events.onVerificationFailed = (event: any) => {
+          // event is an Error object, not a structured event
+          logger.warn("Verification failed:", event);
+          this.handleVerificationEvent({
+            type: "verification-failed",
+            txId: "unknown", // txId not available in error
+            error: event.message || "Verification failed",
+            timestamp: Date.now(),
+          });
+        };
+        
+        events.onVerificationProgress = (event: any) => {
+          if (event.totalBytes > 0) {
+            const progress = (event.processedBytes / event.totalBytes) * 100;
+            const roundedProgress = Math.round(progress / 10) * 10;
+            if (roundedProgress > 0) {
+              logger.debug(
+                `Verification progress for ${event.txId}: ${roundedProgress}%`
+              );
+              this.handleVerificationEvent({
+                type: "verification-progress",
+                txId: event.txId,
+                progress: roundedProgress,
+                timestamp: Date.now(),
+              });
+            }
+          }
+        };
+      }
+      
       this.wayfinder = new Wayfinder({
         gatewaysProvider: routingGatewayProvider,
         verificationStrategy,
         routingStrategy,
-        events: {
-          onVerificationSucceeded: (event) => {
-            // Gateway info not available in this event
-            const gateway = "verified";
-            logger.info(`Verification succeeded for ${event.txId}`);
-
-            this.handleVerificationEvent({
-              type: "verification-completed",
-              txId: event.txId,
-              gateway,
-              timestamp: Date.now(),
-            });
-          },
-          onVerificationFailed: (event) => {
-            // event is an Error object, not a structured event
-            logger.warn("Verification failed:", event);
-            this.handleVerificationEvent({
-              type: "verification-failed",
-              txId: "unknown", // txId not available in error
-              error: event.message || "Verification failed",
-              timestamp: Date.now(),
-            });
-          },
-          onVerificationProgress: (event) => {
-            if (event.totalBytes > 0) {
-              const progress = (event.processedBytes / event.totalBytes) * 100;
-              const roundedProgress = Math.round(progress / 10) * 10;
-              if (roundedProgress > 0) {
-                logger.debug(
-                  `Verification progress for ${event.txId}: ${roundedProgress}%`
-                );
-                this.handleVerificationEvent({
-                  type: "verification-progress",
-                  txId: event.txId,
-                  progress: roundedProgress,
-                  timestamp: Date.now(),
-                });
-              }
-            }
-          },
-        },
+        events,
       });
 
       // Set up additional event listeners via emitter
@@ -559,12 +579,34 @@ class WayfinderService {
         logger.info(
           `Creating NetworkGatewaysProvider with sortBy: ${config.sortBy}, sortOrder: ${config.sortOrder}, limit: ${config.limit}`
         );
-        return new NetworkGatewaysProvider({
+        const provider = new NetworkGatewaysProvider({
           ario: this.createArioInstance(),
           sortBy: config.sortBy,
           sortOrder: config.sortOrder,
           limit: config.limit,
         });
+        
+        // Wrap getGateways with retry logic
+        const originalGetGateways = provider.getGateways.bind(provider);
+        provider.getGateways = async () => {
+          return retryWithBackoff(
+            () => originalGetGateways(),
+            {
+              maxRetries: 3,
+              initialDelayMs: 1000,
+              maxDelayMs: 10000,
+              backoffMultiplier: 2,
+              onRetry: (error, attempt) => {
+                logger.warn(
+                  `NetworkGatewaysProvider.getGateways attempt ${attempt} failed:`,
+                  error.message
+                );
+              },
+            }
+          );
+        };
+        
+        return provider;
       }
 
       case "static": {
@@ -720,12 +762,24 @@ class WayfinderService {
     );
 
     // Get the list of gateways for verification
-    const verificationGateways =
-      await verificationGatewayProvider.getGateways();
-    logger.info(
-      `Verification gateways available (${verificationGateways.length}):`,
-      verificationGateways.map((g: URL) => g.toString()).join(", ")
-    );
+    let verificationGateways: URL[];
+    try {
+      verificationGateways = await verificationGatewayProvider.getGateways();
+      logger.info(
+        `Verification gateways available (${verificationGateways.length}):`,
+        verificationGateways.map((g: URL) => g.toString()).join(", ")
+      );
+    } catch (error) {
+      logger.error("Failed to get verification gateways:", error);
+      // Fall back to default trusted gateways
+      verificationGateways = [
+        new URL("https://permagate.io"),
+        new URL("https://vilenarios.com"),
+      ];
+      logger.warn(
+        `Using fallback verification gateways: ${verificationGateways.map((g) => g.toString()).join(", ")}`
+      );
+    }
 
     switch (this.config.verification.strategy) {
       case "hash":
@@ -879,19 +933,29 @@ class WayfinderService {
         const arUrl = `ar://${txId}${path}`;
         logger.info(`Wayfinder request for ${txId} - URL: ${arUrl}`);
 
-        // Set initial verification status
-        this.setVerificationStatus(txId, {
-          txId,
-          status: "verifying",
-          timestamp: Date.now(),
-        });
+        // Only set verification status if verification is enabled
+        if (this.config.verification.enabled) {
+          // Set initial verification status
+          this.setVerificationStatus(txId, {
+            txId,
+            status: "verifying",
+            timestamp: Date.now(),
+          });
 
-        // Start verification event
-        this.handleVerificationEvent({
-          type: "verification-started",
-          txId,
-          timestamp: Date.now(),
-        });
+          // Start verification event
+          this.handleVerificationEvent({
+            type: "verification-started",
+            txId,
+            timestamp: Date.now(),
+          });
+        } else {
+          // Set status to not-verified when verification is disabled
+          this.setVerificationStatus(txId, {
+            txId,
+            status: "not-verified",
+            timestamp: Date.now(),
+          });
+        }
 
         // Set up verification timeout as a safety net
         if (
@@ -987,10 +1051,10 @@ class WayfinderService {
           size: data.size,
         });
 
-        // Set initial status - verification will be updated via events
+        // Set initial status based on verification configuration
         this.setVerificationStatus(txId, {
           txId,
-          status: "verifying",
+          status: this.config.verification.enabled ? "verifying" : "not-verified",
           gateway,
           timestamp: Date.now(),
         });
@@ -1008,29 +1072,79 @@ class WayfinderService {
           fromCache: false,
         };
       } catch (error) {
-        logger.warn(
-          "Wayfinder request failed, falling back to original gateway:",
-          error
-        );
-
         const errorMessage =
           error instanceof Error ? error.message : "Unknown error";
-        this.setVerificationStatus(txId, {
-          txId,
-          status: "failed",
-          error: errorMessage,
-          timestamp: Date.now(),
-        });
+        
+        // Classify the error type
+        const isGatewayError = errorMessage.includes("Process qNvAoz") || 
+                              errorMessage.includes("rate limit") ||
+                              errorMessage.includes("CU") ||
+                              errorMessage.includes("gateway") ||
+                              errorMessage.includes("Failed to get") ||
+                              errorMessage.includes("Network error") ||
+                              errorMessage.includes("timeout");
+        
+        if (isGatewayError) {
+          // This is a routing/gateway error, not a verification error
+          logger.warn(
+            "AR.IO gateway network temporarily unavailable, using direct gateway instead:",
+            error
+          );
+          logger.info(
+            "Content will still load normally via direct gateway connection"
+          );
+          
+          // Only set verification status if verification is enabled
+          if (this.config.verification.enabled) {
+            // For routing errors with verification enabled, we couldn't verify
+            this.setVerificationStatus(txId, {
+              txId,
+              status: "not-verified",
+              timestamp: Date.now(),
+            });
+          } else {
+            // For routing errors with verification disabled, don't set any verification status
+            // or set it to not-verified to avoid showing error icons
+            this.setVerificationStatus(txId, {
+              txId,
+              status: "not-verified",
+              timestamp: Date.now(),
+            });
+          }
+        } else {
+          // This is likely a verification error
+          logger.warn(
+            "Wayfinder verification failed:",
+            error
+          );
+          
+          // Only set failed status if verification was actually enabled
+          if (this.config.verification.enabled) {
+            this.setVerificationStatus(txId, {
+              txId,
+              status: "failed",
+              error: errorMessage,
+              timestamp: Date.now(),
+            });
+            
+            // Notify listeners of verification failure
+            this.handleVerificationEvent({
+              type: "verification-failed",
+              txId,
+              error: errorMessage,
+              timestamp: Date.now(),
+            });
+          } else {
+            // Shouldn't happen, but handle gracefully
+            this.setVerificationStatus(txId, {
+              txId,
+              status: "not-verified",
+              timestamp: Date.now(),
+            });
+          }
+        }
 
-        // Notify listeners of failure
-        this.handleVerificationEvent({
-          type: "verification-failed",
-          txId,
-          error: errorMessage,
-          timestamp: Date.now(),
-        });
-
-        // Return fallback on error
+        // Return fallback on any error
         return this.getFallbackContentUrl(request);
       }
     }
@@ -1335,6 +1449,7 @@ class WayfinderService {
       this.clearCache(); // Clear cache to ensure fresh routing
       this.initialized = false;
       this.wayfinder = null;
+      this.initializationPromise = null;
 
       // Re-initialize if Wayfinder should be enabled
       if (this.config.enableWayfinder) {
