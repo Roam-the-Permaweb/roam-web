@@ -86,12 +86,12 @@ function determineFallbackGateway(): string {
   }
 }
 
-// Default configuration - All Wayfinder features disabled by default
+// Default configuration - Wayfinder enabled with Balanced mode
 const DEFAULT_CONFIG: WayfinderConfig = {
-  // Master switch - disabled by default
-  enableWayfinder: false,
+  // Master switch - enabled by default
+  enableWayfinder: true,
 
-  // Routing configuration (required when Wayfinder enabled)
+  // Routing configuration - Balanced mode (random from top 20)
   routing: {
     gatewayProvider: {
       type: "simple-cache",
@@ -99,14 +99,14 @@ const DEFAULT_CONFIG: WayfinderConfig = {
         cacheTimeoutMinutes: 60, // Cache for 1 hour
         wrappedProvider: "network",
         wrappedProviderConfig: {
-          sortBy: "operatorStake",
+          sortBy: "totalDelegatedStake",
           sortOrder: "desc",
-          limit: 50, // Increased to 50 gateways for better random distribution
+          limit: 20, // Top 20 gateways for quality + distribution
         },
       },
     },
     strategy: {
-      strategy: "random", // Default to random for load balancing
+      strategy: "random", // Random selection for load balancing
       // Strategy-specific defaults
       staticGateway: "https://arweave.net",
       preferredGateway: "https://arweave.net",
@@ -115,19 +115,19 @@ const DEFAULT_CONFIG: WayfinderConfig = {
     },
   },
 
-  // Verification configuration (optional)
+  // Verification configuration - disabled by default for performance
   verification: {
-    enabled: true, // Enabled by default for security
+    enabled: false, // Off by default
     strategy: "hash",
     gatewayProvider: {
       type: "network",
       config: {
-        sortBy: "operatorStake",
+        sortBy: "totalDelegatedStake",
         sortOrder: "desc",
         limit: 5, // Top 5 staked gateways for verification
       },
     },
-    timeoutMs: 20000,
+    timeoutMs: 30000,
   },
 
   // Fallback configuration (when Wayfinder disabled)
@@ -542,7 +542,7 @@ class WayfinderService {
 
     // Validate numeric values
     if (config.verification.timeoutMs <= 0) {
-      config.verification.timeoutMs = 20000;
+      config.verification.timeoutMs = 30000;
     }
   }
 
@@ -1198,6 +1198,39 @@ class WayfinderService {
   }
 
   /**
+   * Check if content is cached and still valid
+   * Returns cached content response if available, null otherwise
+   */
+  getCachedContent(txId: string, path: string = ""): ContentResponse | null {
+    const cacheKey = `${txId}${path}`;
+    const cacheTimeout = 60 * 60 * 1000; // 1 hour cache
+
+    // Check content cache first (has full blob data)
+    const contentCached = this.contentCache.get(cacheKey);
+    if (contentCached && Date.now() - contentCached.timestamp < cacheTimeout) {
+      // Always get the most current verification status
+      const currentVerificationStatus = this.getVerificationStatus(txId);
+      const isVerified = currentVerificationStatus.status === "verified";
+
+      logger.info(
+        `Cache hit for ${txId} - returning cached content with verification status: ${currentVerificationStatus.status}`
+      );
+
+      return {
+        url: contentCached.url,
+        gateway: contentCached.gateway,
+        verified: isVerified,
+        verificationStatus: currentVerificationStatus,
+        data: contentCached.data,
+        contentType: contentCached.contentType,
+        fromCache: true,
+      };
+    }
+
+    return null;
+  }
+
+  /**
    * Clean up caches only if enough time has passed (throttled)
    */
   private maybeCleanupCaches(): void {
@@ -1323,6 +1356,117 @@ class WayfinderService {
   }
 
   /**
+   * Apply a preset routing mode configuration
+   */
+  applyRoutingMode(mode: "balanced" | "fast" | "fair-share"): void {
+    const routingConfigs = {
+      balanced: {
+        gatewayProvider: {
+          type: "simple-cache" as const,
+          config: {
+            cacheTimeoutMinutes: 60,
+            wrappedProvider: "network" as const,
+            wrappedProviderConfig: {
+              sortBy: "totalDelegatedStake" as const,
+              sortOrder: "desc" as const,
+              limit: 20, // Top 20 for quality + distribution
+            },
+          },
+        },
+        strategy: {
+          strategy: "random" as const,
+          staticGateway: "https://arweave.net",
+          preferredGateway: "https://arweave.net",
+          timeoutMs: 500,
+          probePath: "/ar-io/info",
+        },
+      },
+      fast: {
+        gatewayProvider: {
+          type: "simple-cache" as const,
+          config: {
+            cacheTimeoutMinutes: 60,
+            wrappedProvider: "network" as const,
+            wrappedProviderConfig: {
+              sortBy: "totalDelegatedStake" as const,
+              sortOrder: "desc" as const,
+              limit: 10, // Smaller pool for faster ping testing
+            },
+          },
+        },
+        strategy: {
+          strategy: "fastest-ping" as const,
+          staticGateway: "https://arweave.net",
+          preferredGateway: "https://arweave.net",
+          timeoutMs: 500,
+          probePath: "/ar-io/info",
+        },
+      },
+      "fair-share": {
+        gatewayProvider: {
+          type: "simple-cache" as const,
+          config: {
+            cacheTimeoutMinutes: 60,
+            wrappedProvider: "network" as const,
+            wrappedProviderConfig: {
+              sortBy: "totalDelegatedStake" as const,
+              sortOrder: "desc" as const,
+              limit: 30, // Larger pool for better distribution
+            },
+          },
+        },
+        strategy: {
+          strategy: "round-robin" as const,
+          staticGateway: "https://arweave.net",
+          preferredGateway: "https://arweave.net",
+          timeoutMs: 500,
+          probePath: "/ar-io/info",
+        },
+      },
+    };
+
+    const routingConfig = routingConfigs[mode];
+    if (routingConfig) {
+      this.updateConfig({
+        routing: routingConfig,
+      });
+    }
+  }
+
+  /**
+   * Get current routing mode based on configuration
+   */
+  getCurrentRoutingMode(): "balanced" | "fast" | "fair-share" | "custom" {
+    const { strategy, gatewayProvider } = this.config.routing;
+
+    if (
+      strategy.strategy === "random" &&
+      gatewayProvider.type === "simple-cache" &&
+      (gatewayProvider.config as any).wrappedProviderConfig?.limit === 20
+    ) {
+      return "balanced";
+    }
+
+    if (
+      strategy.strategy === "fastest-ping" &&
+      gatewayProvider.type === "simple-cache" &&
+      (gatewayProvider.config as any).wrappedProviderConfig?.limit === 10
+    ) {
+      return "fast";
+    }
+
+    if (
+      strategy.strategy === "round-robin" &&
+      gatewayProvider.type === "simple-cache" &&
+      (gatewayProvider.config as any).wrappedProviderConfig?.limit === 30
+    ) {
+      return "fair-share";
+    }
+
+    return "custom";
+  }
+
+  /**
    * Load configuration from localStorage
    */
   private loadPersistedConfig(): Partial<WayfinderConfig> {
@@ -1334,7 +1478,10 @@ class WayfinderService {
         if (parsed.routing && parsed.verification) {
           return parsed;
         }
-        // Otherwise return empty to use defaults
+        // Handle legacy config with just enableWayfinder
+        if ('enableWayfinder' in parsed) {
+          return { enableWayfinder: parsed.enableWayfinder };
+        }
       }
     } catch (error) {
       logger.warn("Failed to load persisted Wayfinder config:", error);

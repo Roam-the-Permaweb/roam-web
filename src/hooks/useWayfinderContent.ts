@@ -79,6 +79,24 @@ export function useWayfinderContent(
           error: null
         }))
 
+        // Check cache first for immediate response
+        const cached = wayfinderService.getCachedContent(txId, path)
+        if (cached) {
+          logger.info(`Using cached content for ${txId}`)
+          setResult(prev => ({
+            ...prev,
+            url: cached.url,
+            gateway: cached.gateway,
+            loading: false,
+            verified: cached.verified,
+            verificationStatus: cached.verificationStatus,
+            isWayfinderEnabled: true,
+            data: cached.data,
+            contentType: cached.contentType,
+          }))
+          return
+        }
+
         // Check if Wayfinder is available
         const isWayfinderEnabled = await wayfinderService.isAvailable()
 
