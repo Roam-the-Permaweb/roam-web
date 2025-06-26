@@ -41,7 +41,7 @@ import { useSessionStats } from './hooks/useSessionStats'
 import { useVerificationStatus } from './hooks/useVerificationStatus'
 import { logger } from './utils/logger'
 import { MAX_AD_CLICKS, MIN_AD_CLICKS, DEFAULT_DATE_RANGE_DAYS, APP_SWIPE_THRESHOLD, APP_SWIPE_TIME_LIMIT } from './constants'
-import { WayfinderService } from './services/wayfinder'
+import { wayfinderService } from './services/wayfinder'
 import './styles/app.css'
 import './styles/channels-drawer.css'
 import './styles/welcome-screen.css'
@@ -70,7 +70,7 @@ export function App() {
     const preInitializeWayfinder = async () => {
       try {
         logger.debug('Pre-initializing Wayfinder service...')
-        await WayfinderService.getInstance().initialize()
+        await wayfinderService.initialize()
         logger.debug('Wayfinder pre-initialization complete')
       } catch (error) {
         logger.warn('Wayfinder pre-initialization failed (non-critical):', error)

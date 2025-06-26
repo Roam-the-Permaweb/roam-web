@@ -9,10 +9,9 @@ import {
   FastestPingRoutingStrategy,
   RoundRobinRoutingStrategy,
 } from "@ar.io/wayfinder-core";
-import { ARIO } from "@ar.io/sdk";
+import { ARIO, AOProcess } from "@ar.io/sdk";
 import { connect } from "@permaweb/aoconnect";
 import { logger } from "../utils/logger";
-import { GATEWAY_DATA_SOURCE } from "../engine/fetchQueue";
 import { retryWithBackoff } from "../utils/retry";
 import type {
   WayfinderConfig,
@@ -28,19 +27,24 @@ import type {
 } from "./wayfinderTypes";
 
 /**
- * Determine the fallback gateway based on the current hostname
- * If viewing on roam.ar.io -> use arweave.net
+ * Determine the fallback gateway for when Wayfinder is disabled or fails
+ * This is only used when Wayfinder cannot select a gateway from the AR.IO network
+ * 
+ * If viewing on roam.ar.io -> use arweave.net as fallback
  * If viewing on roam.somegateway.com -> use https://somegateway.com
- * Otherwise use first available gateway from GATEWAY_DATA_SOURCE
+ * Otherwise use arweave.net as default
+ * 
+ * Note: When Wayfinder is enabled (default), it will automatically select
+ * gateways from the AR.IO network and this fallback won't be used.
  */
 function determineFallbackGateway(): string {
   try {
     const hostname = window.location.hostname.toLowerCase();
 
-    // Special case: roam.ar.io should use arweave.net
-    if (hostname === "roam.ar.io") {
+    // For ar.io domains, use arweave.net as fallback when Wayfinder is unavailable
+    if (hostname === "roam.ar.io" || hostname.endsWith(".ar.io")) {
       logger.info(
-        "Detected roam.ar.io hostname, using arweave.net as fallback"
+        "Detected ar.io domain, using arweave.net as fallback (Wayfinder disabled/failed)"
       );
       return "https://arweave.net";
     }
@@ -61,11 +65,10 @@ function determineFallbackGateway(): string {
       hostname === "127.0.0.1" ||
       hostname.startsWith("192.168.")
     ) {
-      const fallback = GATEWAY_DATA_SOURCE[0] || "https://arweave.net";
       logger.info(
-        `Development environment detected, using configured fallback: ${fallback}`
+        `Development environment detected, using arweave.net as fallback`
       );
-      return fallback;
+      return "https://arweave.net";
     }
 
     // For direct gateway hosting (e.g., permagate.io/roam, ardrive.net/roam)
@@ -78,13 +81,12 @@ function determineFallbackGateway(): string {
       return fallbackUrl;
     }
 
-    // Final fallback: use configured data source or arweave.net
-    const fallback = GATEWAY_DATA_SOURCE[0] || "https://arweave.net";
-    logger.info(`Using default configured fallback gateway: ${fallback}`);
-    return fallback;
+    // Final fallback: use arweave.net
+    logger.info(`Using default fallback gateway: https://arweave.net`);
+    return "https://arweave.net";
   } catch (error) {
     logger.warn("Failed to determine fallback gateway from hostname:", error);
-    return GATEWAY_DATA_SOURCE[0] || "https://arweave.net";
+    return "https://arweave.net";
   }
 }
 
@@ -670,16 +672,22 @@ class WayfinderService {
     
     if (cuUrl) {
       logger.info(`Using custom AO CU URL: ${cuUrl}`);
+      
       // Create custom AO client with specified CU URL
       const customAo = connect({
         MODE: 'legacy',
-        CU_URL: cuUrl
+        CU_URL: cuUrl,
+        MU_URL: 'https://mu.ao-testnet.xyz',
+        GRAPHQL_URL: 'https://arweave.net/graphql',
+        GATEWAY_URL: 'https://arweave.net',
       });
       
-      // Pass custom AO client to ARIO
-      // Cast to any to handle type mismatch between SDK versions
-      return ARIO.init({ 
-        ao: customAo 
+      // Create ARIO instance with custom AO infrastructure
+      return ARIO.mainnet({
+        process: new AOProcess({
+          processId: 'agYcCFJtrMG6cqMuZfskIkFTGvUPddICmtQSBIoPdiA',
+          ao: customAo
+        })
       }) as any;
     }
     

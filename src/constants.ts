@@ -8,7 +8,8 @@ export type MediaType =
   | "websites"
   | "text"
   | "everything"
-  | "arfs";
+  | "arfs"
+  | "arns";
 export type Recency = "new" | "old";
 export interface Channel {
   media: MediaType;
@@ -25,6 +26,7 @@ export const MEDIA_TYPES: MediaType[] = [
   "text",
   "everything",
   "arfs",
+  "arns",
 ];
 
 /**
@@ -51,6 +53,7 @@ export interface TxMeta {
     contentType: string;
     customTags: Record<string, string>;
   };
+  arnsName?: string; // The ArNS name that resolved to this content
 }
 
 // --------------------------------------------------------------------------
@@ -62,7 +65,8 @@ const BASE_CONTENT_TYPES: Record<Exclude<MediaType, "everything">, string[]> = {
   music: ["audio/mpeg", "audio/mp3", "audio/wav", "audio/ogg", "audio/webm", "audio/mp4", "audio/flac"],
   websites: ["application/x.arweave-manifest+json", "text/html", "application/xhtml+xml"],
   text: ["text/markdown", "application/pdf"],
-  arfs: ["application/json"] // this ensures only public arfs files
+  arfs: ["application/json"], // this ensures only public arfs files
+  arns: [] // ArNS doesn't filter by content type, it resolves names to any content
 };
 
 // Build full map including "everything" as the union of all other arrays

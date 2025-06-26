@@ -30,6 +30,13 @@ export function TransactionInfo({ txMeta, formattedTime, verificationStatus }: T
           </div>
         )}
         
+        {txMeta.arnsName && (
+          <div className="metadata-link arns-name">
+            <Icons.Globe size={14} />
+            <span>{txMeta.arnsName}</span>
+          </div>
+        )}
+        
         <a
           className="metadata-link"
           href={`https://viewblock.io/arweave/tx/${txMeta.id}`}

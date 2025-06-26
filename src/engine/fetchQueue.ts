@@ -25,6 +25,7 @@ import { fetchTxsRange, getCurrentBlockHeight, INITIAL_PAGE_LIMIT, REFILL_PAGE_L
 import { logger } from "../utils/logger";
 import { learnFromBlockRange } from "../utils/dateBlockUtils";
 import { get as idbGet, set as idbSet } from "idb-keyval";
+import { arnsService } from "../services/arns";
 import {
   type TxMeta,
   type Channel,
@@ -207,6 +208,11 @@ async function fetchWindow(
   appName?: string,
   isRefill: boolean = false
 ): Promise<TxMeta[]> {
+  // Special handling for ArNS channel
+  if (media === 'arns') {
+    return fetchArNSWindow();
+  }
+  
   const pageLimit = isRefill ? REFILL_PAGE_LIMIT : INITIAL_PAGE_LIMIT;
   const result = await fetchTxsRange(media, min, max, owner, appName, pageLimit, isRefill);
   
@@ -215,6 +221,68 @@ async function fetchWindow(
   }
   
   return result.txs;
+}
+
+/**
+ * Fetch ArNS-resolved transactions
+ */
+async function fetchArNSWindow(): Promise<TxMeta[]> {
+  const transactions: TxMeta[] = [];
+  const targetCount = INITIAL_PAGE_LIMIT;
+  
+  logger.info('Fetching ArNS transactions...');
+  
+  // Keep fetching ArNS names until we have enough valid transactions
+  while (transactions.length < targetCount) {
+    const arnsMetadata = await arnsService.getNextArNSName();
+    
+    if (!arnsMetadata) {
+      logger.warn('No more ArNS names available');
+      break;
+    }
+    
+    try {
+      // Fetch the transaction metadata for the resolved ID
+      const response = await fetch(`${GATEWAY_DATA_SOURCE[0]}/graphql`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `
+            query GetTransaction($id: ID!) {
+              transaction(id: $id) {
+                id
+                owner { address }
+                fee { ar }
+                quantity { ar }
+                tags { name value }
+                data { size }
+                block { height timestamp }
+                bundledIn { id }
+              }
+            }
+          `,
+          variables: { id: arnsMetadata.resolvedTxId }
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.data?.transaction) {
+        const tx = result.data.transaction;
+        // Add ArNS name to the transaction metadata
+        transactions.push({
+          ...tx,
+          arnsName: arnsMetadata.name
+        });
+        logger.debug(`Added ArNS transaction: ${arnsMetadata.name} -> ${arnsMetadata.resolvedTxId}`);
+      }
+    } catch (error) {
+      logger.error(`Failed to fetch transaction for ArNS ${arnsMetadata.name}:`, error);
+    }
+  }
+  
+  logger.info(`Fetched ${transactions.length} ArNS transactions`);
+  return transactions;
 }
 
 /**
@@ -310,7 +378,8 @@ export async function getNextTx(channel: Channel): Promise<TxMeta | null> {
  */
 export function clearSeenIds(): void {
   seenIds.clear();
-  logger.debug("Cleared seen IDs set");
+  arnsService.clearSeenNames();
+  logger.debug("Cleared seen IDs set and ArNS seen names");
 }
 
 /**

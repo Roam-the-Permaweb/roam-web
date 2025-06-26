@@ -79,6 +79,8 @@ export const Icons = {
   Websites: (props: IconProps) => <Globe size={20} {...props} />,
   Text: (props: IconProps) => <FileText size={20} {...props} />,
   ArFS: (props: IconProps) => <FolderOpen size={20} {...props} />,
+  ArNS: (props: IconProps) => <Globe size={20} {...props} />,
+  Globe: (props: IconProps) => <Globe size={16} {...props} />,
   
   // Time periods
   Recent: (props: IconProps) => <Clock size={18} {...props} />,

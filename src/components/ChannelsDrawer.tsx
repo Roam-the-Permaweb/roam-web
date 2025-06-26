@@ -162,6 +162,10 @@ export function ChannelsDrawer({
               <span className="content-icon"><Icons.ArFS /></span>
               <span className="content-label">ArFS</span>
             </button>
+            <button className={`content-card ${currentMedia === 'arns' ? 'active' : ''}`} onClick={() => handleMediaChange('arns')}>
+              <span className="content-icon"><Icons.ArNS /></span>
+              <span className="content-label">ArNS</span>
+            </button>
           </div>
         </div>
         
@@ -264,8 +268,9 @@ export function ChannelsDrawer({
                             className={`text-input ${cuUrlError ? 'error' : ''}`}
                             value={customCuUrl}
                             onChange={(e) => {
-                              setCustomCuUrl(e.target.value)
-                              validateCuUrl(e.target.value)
+                              const target = e.target as HTMLInputElement
+                              setCustomCuUrl(target.value)
+                              validateCuUrl(target.value)
                             }}
                             onBlur={handleApplyCuUrl}
                             placeholder="https://cu.ardrive.io"
