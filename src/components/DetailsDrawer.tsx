@@ -144,6 +144,16 @@ export const DetailsDrawer = ({ txMeta, open, onClose }: DetailsDrawerProps): JS
                 </a>
               </span>
             </div>
+            {arfsMeta?.customTags?.pinnedDataOwner && (
+              <div className="info-item">
+                <span className="info-label">📌 Pinned From</span>
+                <span className="info-value">
+                  <a href={`https://viewblock.io/arweave/address/${arfsMeta.customTags.pinnedDataOwner}`} target="_blank" rel="noopener noreferrer" title={arfsMeta.customTags.pinnedDataOwner}>
+                    {shortenId(arfsMeta.customTags.pinnedDataOwner)}
+                  </a>
+                </span>
+              </div>
+            )}
             <div className="info-item">
               <span className="info-label">Block</span>
               <span className="info-value">{block.height.toLocaleString()}</span>

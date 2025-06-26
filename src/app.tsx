@@ -112,7 +112,10 @@ export function App() {
   const sessionStats = useSessionStats(appState.currentTx)
   
   // Track verification status for current transaction
-  const verificationStatus = useVerificationStatus(appState.currentTx?.id || null)
+  // For ArFS files, track the data transaction instead of metadata
+  const verificationStatus = useVerificationStatus(
+    appState.currentTx?.arfsMeta?.dataTxId || appState.currentTx?.id || null
+  )
   
 
   // Navigation callbacks 

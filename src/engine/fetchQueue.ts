@@ -283,6 +283,12 @@ export async function getNextTx(channel: Channel): Promise<TxMeta | null> {
           customTags: rest,
         };
 
+        // Filter out octet-stream content types that can't be rendered
+        if (dataContentType === 'application/octet-stream') {
+          logger.debug(`Skipping ArFS file with octet-stream content type: ${tx.id}`);
+          return getNextTx(channel); // Skip to next transaction
+        }
+
       } catch (err) {
         logger.warn(`Failed to load ArFS metadata for ${tx.id}`, err);
         return getNextTx(channel); // try next tx

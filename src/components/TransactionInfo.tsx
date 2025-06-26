@@ -16,6 +16,10 @@ export function TransactionInfo({ txMeta, formattedTime, verificationStatus }: T
   
   const MediaTypeIcon = getMediaTypeIcon(contentType)
   
+  // Check if this is an ArFS pin
+  const pinnedDataOwner = txMeta.arfsMeta?.customTags?.pinnedDataOwner
+  const isPinned = !!pinnedDataOwner
+  
   return (
     <div className="content-metadata">
       <div className="metadata-footer">
@@ -37,16 +41,43 @@ export function TransactionInfo({ txMeta, formattedTime, verificationStatus }: T
           <span>{txMeta.id.slice(0,8)}…</span>
         </a>
         
-        <a
-          className="metadata-link"
-          href={`https://viewblock.io/arweave/address/${txMeta.owner.address}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          title={`Owner: ${txMeta.owner.address}`}
-        >
-          <Icons.User size={14} />
-          <span>{txMeta.owner.address.slice(0,8)}…</span>
-        </a>
+        {isPinned ? (
+          // For pinned files, show both pinner and original owner
+          <>
+            <a
+              className="metadata-link"
+              href={`https://viewblock.io/arweave/address/${txMeta.owner.address}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Pinned by: ${txMeta.owner.address}`}
+            >
+              <span style={{ marginRight: '4px' }}>📌</span>
+              <span>{txMeta.owner.address.slice(0,6)}…</span>
+            </a>
+            <a
+              className="metadata-link"
+              href={`https://viewblock.io/arweave/address/${pinnedDataOwner}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Originally by: ${pinnedDataOwner}`}
+            >
+              <Icons.User size={14} />
+              <span>{pinnedDataOwner.slice(0,6)}…</span>
+            </a>
+          </>
+        ) : (
+          // Regular file, show owner normally
+          <a
+            className="metadata-link"
+            href={`https://viewblock.io/arweave/address/${txMeta.owner.address}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={`Owner: ${txMeta.owner.address}`}
+          >
+            <Icons.User size={14} />
+            <span>{txMeta.owner.address.slice(0,8)}…</span>
+          </a>
+        )}
         
         <a
           className="metadata-link"

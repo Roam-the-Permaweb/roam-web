@@ -113,9 +113,10 @@ export const MediaView = ({
     }
   };
 
-  const [manualLoad, setManualLoad] = useState(contentType.startsWith('image/') && size > IMAGE_LOAD_THRESHOLD);
-  const [manualLoadVideo, setManualLoadVideo] = useState(contentType.startsWith('video/') && size > VIDEO_LOAD_THRESHOLD);
-  const [manualLoadAudio, setManualLoadAudio] = useState(contentType.startsWith('audio/') && size > AUDIO_LOAD_THRESHOLD);
+  // Initialize with false, will be properly set in useEffect after content type is determined
+  const [manualLoad, setManualLoad] = useState(false);
+  const [manualLoadVideo, setManualLoadVideo] = useState(false);
+  const [manualLoadAudio, setManualLoadAudio] = useState(false);
   const [manualLoadText, setManualLoadText] = useState(false);
   const [textContent, setTextContent] = useState<string | null>(null);
   const [loadingText, setLoadingText] = useState(false);
@@ -125,13 +126,16 @@ export const MediaView = ({
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const textExtractionRef = useRef<{ txId: string; promise: Promise<string> | null }>({ txId: '', promise: null });
 
-  // Reset flags when tx changes
+  // Reset flags when tx changes and set manual load states based on content type and size
 useEffect(() => {
+  // Use the final content type which includes ArFS metadata content type
   const isImage = contentType.startsWith('image/');
   const isVideo = contentType.startsWith('video/');
   const isAudio = contentType.startsWith('audio/');
   const isText = ['text/plain', 'text/markdown'].includes(contentType);
 
+  // Set manual load flags based on size thresholds
+  // For ArFS files, this uses the actual file size from arfsMeta.size
   setManualLoad(isImage && size > IMAGE_LOAD_THRESHOLD);
   setManualLoadVideo(isVideo && size > VIDEO_LOAD_THRESHOLD);
   setManualLoadAudio(isAudio && size > AUDIO_LOAD_THRESHOLD);
