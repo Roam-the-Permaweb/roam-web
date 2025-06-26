@@ -775,6 +775,38 @@
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+.advanced-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 8px 0;
+  transition: color 0.2s;
+  width: 100%;
+  text-align: left;
+}
+
+.advanced-toggle:hover {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.advanced-toggle svg {
+  transition: transform 0.2s;
+}
+
+.advanced-toggle svg.rotated {
+  transform: rotate(180deg);
+}
+
+.advanced-content {
+  margin-top: 16px;
+  padding-left: 20px;
+}
+
 .subsection {
   margin-bottom: 1.5rem;
 }
@@ -1277,4 +1309,70 @@
     font-size: 0.6875rem;
     min-height: 32px;
   }
+}
+
+/* CU URL Input Styles */
+.input-group {
+  margin-top: 8px;
+}
+
+.text-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: white;
+  font-size: 13px;
+  font-family: monospace;
+  transition: border-color 0.2s;
+}
+
+.text-input:focus {
+  outline: none;
+  border-color: #FF6A00;
+}
+
+.text-input.error {
+  border-color: #ef4444;
+}
+
+.error-message {
+  display: block;
+  color: #ef4444;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.cu-info {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(255, 106, 0, 0.1);
+  border-radius: 8px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.5;
+}
+
+.cu-info svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.reset-cu-btn {
+  margin-top: 12px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.reset-cu-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
 }

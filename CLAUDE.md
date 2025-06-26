@@ -188,6 +188,7 @@ ArFS media type fetches JSON metadata first, then extracts `dataTxId` for actual
 - `VITE_WAYFINDER_VERIFICATION_STRATEGY` - Verification method: hash, none
 - `VITE_WAYFINDER_TRUSTED_GATEWAYS` - Gateways for hash verification
 - `VITE_WAYFINDER_VERIFICATION_TIMEOUT` - Verification timeout in milliseconds
+- `VITE_WAYFINDER_CU_URL` - Custom AO Compute Unit URL (default: https://cu.ardrive.io)
 
 **Gateway Configuration**:
 App supports "self" gateway mapping that derives data gateway from current hostname (e.g., `roam_user.ardrive.net` → `ardrive.net`).

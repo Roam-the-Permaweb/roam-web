@@ -46,6 +46,11 @@ export interface WayfinderConfig {
   // Master control
   enableWayfinder: boolean
   
+  // AO Compute Unit configuration (optional)
+  ao?: {
+    cuUrl?: string  // Custom CU URL (default: https://cu.ardrive.io)
+  }
+  
   // Routing configuration (required when Wayfinder enabled)
   routing: {
     gatewayProvider: GatewayProviderConfig

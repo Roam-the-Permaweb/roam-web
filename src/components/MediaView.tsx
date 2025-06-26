@@ -484,11 +484,19 @@ useEffect(() => {
         {privacyOn && <div className="privacy-screen" />}
         
         {/* Subtle loading indicator for Wayfinder - only show when actually verifying */}
+        {wayfinderResult.loading && wayfinderResult.verificationStatus.status !== 'verifying' && (
+          <div className="wayfinder-loading-overlay">
+            <div className="wayfinder-loading-indicator">
+              <Icons.Loading size={16} />
+              <span>Loading content...</span>
+            </div>
+          </div>
+        )}
         {wayfinderResult.loading && wayfinderResult.verificationStatus.status === 'verifying' && (
           <div className="wayfinder-loading-overlay">
             <div className="wayfinder-loading-indicator">
               <Icons.Loading size={16} />
-              <span>Verifying content...</span>
+              <span>Loading and Verifying content...</span>
             </div>
           </div>
         )}

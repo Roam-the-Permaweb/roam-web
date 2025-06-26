@@ -28,6 +28,7 @@ import {
   BarChart,
   Heart,
   Layers,
+  ChevronDown,
   CheckCircle,
   AlertTriangle,
   Settings,
@@ -109,7 +110,8 @@ export const Icons = {
   
   // Advanced settings icons
   Settings: (props: IconProps) => <Settings size={16} {...props} />,
-  RotateCcw: (props: IconProps) => <RotateCcw size={16} {...props} />
+  RotateCcw: (props: IconProps) => <RotateCcw size={16} {...props} />,
+  ChevronDown: (props: IconProps) => <ChevronDown size={16} {...props} />
 }
 
 // Helper function to get media type icon

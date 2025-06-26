@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'preact/hooks'
 import { DateRangeSlider } from './DateRangeSlider'
 import { Icons } from './Icons'
 import { useSimplifiedWayfinderSettings } from '../hooks/useSimplifiedWayfinderSettings'
@@ -63,10 +64,44 @@ export function ChannelsDrawer({
     settings: wayfinderSettings, 
     updateSettings: updateWayfinderSettings
   } = useSimplifiedWayfinderSettings()
+  
+  // Advanced settings state
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [customCuUrl, setCustomCuUrl] = useState(wayfinderSettings.cuUrl || '')
+  const [cuUrlError, setCuUrlError] = useState('')
+  
+  // Update customCuUrl when wayfinderSettings changes
+  useEffect(() => {
+    setCustomCuUrl(wayfinderSettings.cuUrl || '')
+  }, [wayfinderSettings.cuUrl])
 
   const handleMediaChange = (media: MediaType) => {
     onMediaChange(media)
     onClose()
+  }
+  
+  // Validation function for CU URL
+  const validateCuUrl = (url: string) => {
+    if (!url) return true // Empty is valid (uses default)
+    
+    try {
+      const parsed = new URL(url)
+      const isValid = parsed.protocol === 'https:' || parsed.protocol === 'http:'
+      setCuUrlError(isValid ? '' : 'URL must start with http:// or https://')
+      return isValid
+    } catch {
+      setCuUrlError('Invalid URL format')
+      return false
+    }
+  }
+  
+  // Apply CU URL changes
+  const handleApplyCuUrl = () => {
+    if (validateCuUrl(customCuUrl)) {
+      updateWayfinderSettings({ 
+        cuUrl: customCuUrl || undefined // Empty string becomes undefined
+      })
+    }
   }
 
   const routingModeInfo: Record<RoutingMode, { label: string; description: string }> = {
@@ -201,6 +236,68 @@ export function ChannelsDrawer({
                   >
                     <div className="toggle-indicator" />
                   </button>
+                </div>
+
+                {/* Advanced Settings */}
+                <div className="advanced-settings">
+                  <button 
+                    className="advanced-toggle"
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                    aria-label={showAdvanced ? "Hide advanced settings" : "Show advanced settings"}
+                  >
+                    <Icons.ChevronDown size={16} className={showAdvanced ? 'rotated' : ''} />
+                    <span>Advanced Settings</span>
+                  </button>
+                  
+                  {showAdvanced && (
+                    <div className="advanced-content">
+                      <div className="setting-row">
+                        <div className="setting-info">
+                          <span className="setting-label">AO Compute Unit URL</span>
+                          <span className="setting-description">
+                            Override the default CU for gateway information
+                          </span>
+                        </div>
+                        <div className="input-group">
+                          <input
+                            type="text"
+                            className={`text-input ${cuUrlError ? 'error' : ''}`}
+                            value={customCuUrl}
+                            onChange={(e) => {
+                              setCustomCuUrl(e.target.value)
+                              validateCuUrl(e.target.value)
+                            }}
+                            onBlur={handleApplyCuUrl}
+                            placeholder="https://cu.ardrive.io"
+                          />
+                          {cuUrlError && (
+                            <span className="error-message">{cuUrlError}</span>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="cu-info">
+                        <Icons.Info size={14} />
+                        <span>
+                          The AO Compute Unit provides gateway information from the AR.IO network. 
+                          Only change this if the default CU is experiencing issues. 
+                          Common alternatives: https://cu.ao-testnet.xyz
+                        </span>
+                      </div>
+                      
+                      {customCuUrl && (
+                        <button 
+                          className="reset-cu-btn"
+                          onClick={() => {
+                            setCustomCuUrl('')
+                            updateWayfinderSettings({ cuUrl: undefined })
+                          }}
+                        >
+                          Reset to Default
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </>
             )}

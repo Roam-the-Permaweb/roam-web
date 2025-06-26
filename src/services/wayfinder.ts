@@ -10,6 +10,7 @@ import {
   RoundRobinRoutingStrategy,
 } from "@ar.io/wayfinder-core";
 import { ARIO } from "@ar.io/sdk";
+import { connect } from "@permaweb/aoconnect";
 import { logger } from "../utils/logger";
 import { GATEWAY_DATA_SOURCE } from "../engine/fetchQueue";
 import { retryWithBackoff } from "../utils/retry";
@@ -91,6 +92,11 @@ function determineFallbackGateway(): string {
 const DEFAULT_CONFIG: WayfinderConfig = {
   // Master switch - enabled by default
   enableWayfinder: true,
+
+  // AO configuration
+  ao: {
+    cuUrl: undefined  // Uses default https://cu.ardrive.io
+  },
 
   // Routing configuration - Balanced mode (random from top 20)
   routing: {
@@ -507,6 +513,15 @@ class WayfinderService {
         }
       }
     }
+
+    // AO Compute Unit URL
+    if (env.VITE_WAYFINDER_CU_URL) {
+      if (!this.config.ao) {
+        this.config.ao = {};
+      }
+      this.config.ao.cuUrl = env.VITE_WAYFINDER_CU_URL;
+      logger.info(`Using CU URL from environment: ${env.VITE_WAYFINDER_CU_URL}`);
+    }
   }
 
   /**
@@ -647,11 +662,29 @@ class WayfinderService {
   }
 
   /**
-   * Create ARIO instance - simplified in new SDK
+   * Create ARIO instance with optional custom CU URL
    */
   private createArioInstance() {
-    // The new SDK handles AO connection internally
-    // Cast to any to handle type mismatch between SDK versions
+    // Check if custom CU URL is configured
+    const cuUrl = this.config.ao?.cuUrl;
+    
+    if (cuUrl) {
+      logger.info(`Using custom AO CU URL: ${cuUrl}`);
+      // Create custom AO client with specified CU URL
+      const customAo = connect({
+        MODE: 'legacy',
+        CU_URL: cuUrl
+      });
+      
+      // Pass custom AO client to ARIO
+      // Cast to any to handle type mismatch between SDK versions
+      return ARIO.init({ 
+        ao: customAo 
+      }) as any;
+    }
+    
+    // Default to mainnet (uses default CU URL)
+    logger.info('Using default AO CU URL (https://cu.ardrive.io)');
     return ARIO.mainnet() as any;
   }
 
@@ -1406,6 +1439,10 @@ class WayfinderService {
     this.config = {
       ...this.config,
       ...newConfig,
+      ao: {
+        ...this.config.ao,
+        ...(newConfig.ao || {}),
+      },
       routing: {
         ...this.config.routing,
         ...(newConfig.routing || {}),
@@ -1438,7 +1475,8 @@ class WayfinderService {
       JSON.stringify(oldConfig.routing) !==
         JSON.stringify(this.config.routing) ||
       JSON.stringify(oldConfig.verification) !==
-        JSON.stringify(this.config.verification);
+        JSON.stringify(this.config.verification) ||
+      JSON.stringify(oldConfig.ao) !== JSON.stringify(this.config.ao);
 
     logger.info(
       `Needs reinitialization: ${needsReinitialization}, Currently initialized: ${this.initialized}`

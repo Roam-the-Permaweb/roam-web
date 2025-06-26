@@ -8,6 +8,7 @@ interface SimplifiedWayfinderSettings {
   enabled: boolean;
   routingMode: RoutingMode;
   verifiedBrowsing: boolean;
+  cuUrl?: string;  // Custom CU URL
 }
 
 interface UseSimplifiedWayfinderSettingsResult {
@@ -40,6 +41,7 @@ export function useSimplifiedWayfinderSettings(): UseSimplifiedWayfinderSettings
           enabled: config.enableWayfinder,
           routingMode: currentMode === "custom" ? "balanced" : currentMode,
           verifiedBrowsing: config.verification.enabled,
+          cuUrl: config.ao?.cuUrl,
         });
 
         setIsConnected(config.enableWayfinder);
@@ -96,6 +98,13 @@ export function useSimplifiedWayfinderSettings(): UseSimplifiedWayfinderSettings
           },
         },
         timeoutMs: 30000,
+      };
+    }
+
+    // Only update CU URL if it changed
+    if ("cuUrl" in newSettings) {
+      configUpdate.ao = {
+        cuUrl: updatedSettings.cuUrl || undefined,
       };
     }
 
