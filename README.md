@@ -47,6 +47,86 @@
 
 ---
 
+## ⚙️ Wayfinder Configuration
+
+### **Default Settings**
+
+Roam comes with optimized default settings that work out of the box:
+
+- **Wayfinder**: Enabled by default for optimal content delivery
+- **Routing Mode**: Balanced (random selection from top 20 staked gateways)
+- **Verified Browsing**: Disabled by default for faster performance
+- **Gateway Cache**: 1-hour TTL for efficiency
+
+### **User-Configurable Settings**
+
+Access Wayfinder settings through the **Channels drawer** (filter icon) in the app:
+
+#### **1. Wayfinder Toggle**
+- **Enabled (Default)**: Uses AR.IO network for smart gateway routing
+- **Disabled**: Falls back to direct gateway connections
+
+#### **2. Routing Modes**
+
+| Mode | Description | Best For |
+|------|-------------|----------|
+| **Balanced** (Default) | Random selection from top 20 staked gateways | General use - mix of speed and distribution |
+| **Fast** | Pings top 10 gateways and selects fastest | Users prioritizing speed |
+| **Fair Share** | Round-robin through top 30 gateways | Supporting network decentralization |
+
+#### **3. Verified Browsing**
+- **Disabled (Default)**: Faster content loading without verification
+- **Enabled**: Cryptographic verification using top 5 staked gateways
+- Verification uses SHA-256 hash comparison to ensure content integrity
+- Visual indicators show verification status (✓ = verified, ⏳ = verifying)
+
+#### **4. Help Improve AR.IO Network (Telemetry)**
+- **Disabled (Default)**: No data is collected - privacy-first approach
+- **Enabled**: Share anonymous performance metrics with AR.IO
+- When enabled, sends a 10% sample of:
+  - Gateway routing performance (response times, success rates)
+  - Request success/failure rates (no content data)
+  - Aggregate performance metrics (no personal information)
+- **Never collects**: Transaction IDs, content data, personal information, or browsing history
+- Uses OpenTelemetry standard for industry-standard telemetry collection
+
+#### **5. Advanced Settings**
+- **Custom AO Compute Unit URL**: Override default CU for gateway information
+  - Default: `https://cu.ardrive.io`
+  - Alternative: `https://cu.ao-testnet.xyz`
+
+### **Fallback Gateway Logic**
+
+When Wayfinder is unavailable, Roam intelligently selects fallback gateways:
+
+| Hostname Pattern | Fallback Gateway |
+|-----------------|------------------|
+| `roam.ar.io` | `https://arweave.net` |
+| `roam.gateway.com` | `https://gateway.com` |
+| `localhost` / dev | `https://arweave.net` |
+| Direct gateway hosting | Uses hosting gateway |
+| Default | `https://arweave.net` |
+
+### **Content Size Thresholds**
+
+To respect bandwidth, Roam auto-loads content up to these limits:
+
+| Content Type | Auto-load Limit | Above Limit |
+|--------------|-----------------|-------------|
+| **Images** | 25 MB | Shows "Load Content" button |
+| **Videos** | 200 MB | Shows "Load Content" button |
+| **Audio** | 50 MB | Shows "Load Content" button |
+| **Text** | 10 MB | Shows "Load Content" button |
+
+### **Configuration Persistence**
+
+- All settings are saved to browser localStorage
+- Settings persist across sessions
+- Configuration key: `wayfinder-config`
+- Telemetry preference is preserved across sessions (opt-in only)
+
+---
+
 ## ✨ v0.1.0 Features (Previous Release)
 
 ### 🎨 **Apple-Inspired Design**
@@ -189,22 +269,6 @@ VITE_GATEWAYS_GRAPHQL=https://goldsky-arweave-api.com/graphql,https://arweave-se
 
 # Data gateways (optional - defaults to arweave.net)
 VITE_GATEWAYS_DATA_SOURCE=https://arweave.net,https://ar-io.net,self
-
-# Wayfinder configuration (optional - experimental, all disabled by default)
-VITE_ENABLE_WAYFINDER=true                    # Master switch - enables Wayfinder (legacy)
-VITE_WAYFINDER_ENABLE_ROUTING=true            # Enable smart gateway selection via AR.IO
-VITE_WAYFINDER_ENABLE_VERIFICATION=true       # Enable content verification via hashes
-
-# Gateway provider configuration
-VITE_WAYFINDER_GATEWAY_PROVIDER=network       # Options: network, static, simple-cache
-VITE_WAYFINDER_GATEWAY_LIMIT=5               # Max gateways for routing (default: 5)
-VITE_WAYFINDER_STATIC_GATEWAYS=https://arweave.net,https://permagate.io
-VITE_WAYFINDER_CACHE_TIMEOUT=1               # Gateway cache TTL in minutes
-
-# Verification configuration  
-VITE_WAYFINDER_VERIFICATION_STRATEGY=hash     # Options: hash, none
-VITE_WAYFINDER_TRUSTED_GATEWAYS=https://permagate.io,https://vilenarios.com
-VITE_WAYFINDER_VERIFICATION_TIMEOUT=10000    # Verification timeout in milliseconds
 ```
 
 **Gateway Notes**:
@@ -212,13 +276,11 @@ VITE_WAYFINDER_VERIFICATION_TIMEOUT=10000    # Verification timeout in milliseco
 - Multiple gateways provide automatic failover
 - AR.IO gateways offer enhanced performance and reliability
 
-**Wayfinder Notes**:
-- **All Wayfinder features disabled by default** (experimental)
-- **Granular control**: Enable routing and verification independently
-- **Provider options**: `network` (AR.IO), `static` (custom list), `simple-cache` (cached network)
-- **Verification strategies**: `hash` (cryptographic), `none` (disabled)
-- **Auto-fallback**: Direct gateways when Wayfinder unavailable
-- **Configuration persistence**: Settings saved to localStorage for user preferences
+**Wayfinder Configuration**:
+- Wayfinder is now **enabled by default** with optimized settings
+- All configuration is done through the in-app UI (Channels drawer)
+- No environment variables needed for Wayfinder - settings persist in localStorage
+- See the [Wayfinder Configuration](#️-wayfinder-configuration) section above for details
 
 ---
 

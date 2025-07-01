@@ -8,6 +8,7 @@ interface SimplifiedWayfinderSettings {
   enabled: boolean;
   routingMode: RoutingMode;
   verifiedBrowsing: boolean;
+  telemetryEnabled: boolean;  // Opt-in telemetry
   cuUrl?: string;  // Custom CU URL
 }
 
@@ -26,6 +27,7 @@ export function useSimplifiedWayfinderSettings(): UseSimplifiedWayfinderSettings
     enabled: true, // Default to enabled
     routingMode: "balanced", // Default to balanced mode
     verifiedBrowsing: false, // Default to off for performance
+    telemetryEnabled: false, // Default to off for privacy
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isConnected, setIsConnected] = useState(false);
@@ -41,6 +43,7 @@ export function useSimplifiedWayfinderSettings(): UseSimplifiedWayfinderSettings
           enabled: config.enableWayfinder,
           routingMode: currentMode === "custom" ? "balanced" : currentMode,
           verifiedBrowsing: config.verification.enabled,
+          telemetryEnabled: config.telemetry.enabled,
           cuUrl: config.ao?.cuUrl,
         });
 
@@ -105,6 +108,14 @@ export function useSimplifiedWayfinderSettings(): UseSimplifiedWayfinderSettings
     if ("cuUrl" in newSettings) {
       configUpdate.ao = {
         cuUrl: updatedSettings.cuUrl || undefined,
+      };
+    }
+
+    // Only update telemetry if it changed
+    if ("telemetryEnabled" in newSettings) {
+      configUpdate.telemetry = {
+        enabled: updatedSettings.telemetryEnabled,
+        sampleRate: 0.1, // Keep default 10% sample rate
       };
     }
 

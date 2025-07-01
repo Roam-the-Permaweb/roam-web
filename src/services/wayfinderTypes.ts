@@ -69,6 +69,12 @@ export interface WayfinderConfig {
   fallback: {
     gateways: string[]
   }
+  
+  // Telemetry configuration (opt-in only)
+  telemetry: {
+    enabled: boolean      // Default: false (privacy-first)
+    sampleRate: number    // Default: 0.1 (10% when enabled)
+  }
 }
 
 export interface ContentRequest {

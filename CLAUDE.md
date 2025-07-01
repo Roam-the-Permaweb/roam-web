@@ -53,16 +53,16 @@ URL parameters drive content initialization:
 - `minBlock`/`maxBlock` - Custom block range
 - `channel` - Media type filter
 
-**AR.IO Wayfinder Integration (v0.2.0 - Experimental)**:
+**AR.IO Wayfinder Integration (v0.2.0)**:
 
-- `wayfinder.ts` - AR.IO SDK integration with dynamic gateway routing (disabled by default)
+- `wayfinder.ts` - AR.IO SDK integration with dynamic gateway routing (enabled by default)
 - `useWayfinderContent.ts` - Content fetching hook with verification event handling
 - `VerificationIndicator.tsx` - Real-time verification status display
-- Content verification via trusted gateways (permagate.io, vilenarios.com)
+- Content verification via top 5 staked gateways (when enabled)
 - Intelligent caching with TTL and LRU cleanup mechanisms
 - Size-aware loading to respect bandwidth thresholds
 - Race condition-free verification event propagation
-- Requires `VITE_ENABLE_WAYFINDER=true` to activate
+- Telemetry support for anonymous performance metrics (opt-in only)
 
 **State Management**:
 
@@ -166,29 +166,35 @@ ArFS media type fetches JSON metadata first, then extracts `dataTxId` for actual
 - `VITE_GATEWAYS_GRAPHQL` - Comma-separated GraphQL endpoints (required)
 - `VITE_GATEWAYS_DATA_SOURCE` - Content delivery gateways
 
-**Wayfinder Configuration** (All disabled by default):
+**Wayfinder Configuration** (Enabled by default):
 
-**In-App Configuration UI**: All Wayfinder settings can be configured directly in the Channels drawer with:
+**Default Settings**:
+- **Master Switch**: Enabled by default for optimal content delivery
+- **Routing Mode**: Balanced (random from top 20 staked gateways)
+- **Verified Browsing**: Disabled by default for performance
+- **Gateway Cache**: 1-hour TTL
+- **Telemetry**: Disabled by default (opt-in only) for privacy
 
-- **Real-time validation** - Instant feedback for invalid gateway URLs
-- **Connection monitoring** - Live status indicators for Wayfinder connectivity
-- **Auto-dependency logic** - Smart enabling/disabling of related features
-- **Visual error feedback** - Red borders and inline messages for validation errors
-- **One-click reset** - Restore all settings to safe defaults
+**In-App Configuration UI**: All Wayfinder settings are configured directly in the Channels drawer:
 
-**Environment Variables** (optional - can be overridden by UI):
+- **Enable/Disable Toggle** - Master switch for Wayfinder
+- **Routing Mode Selection** - Balanced, Fast, or Fair Share
+- **Verified Browsing Toggle** - Optional cryptographic verification
+- **Telemetry Toggle** - Opt-in anonymous performance metrics (10% sample rate)
+- **Advanced Settings** - Custom AO Compute Unit URL
 
-- `VITE_ENABLE_WAYFINDER` - Legacy master switch for Wayfinder integration
-- `VITE_WAYFINDER_ENABLE_ROUTING` - Smart gateway selection via AR.IO network
-- `VITE_WAYFINDER_ENABLE_VERIFICATION` - Content verification via cryptographic hashes
-- `VITE_WAYFINDER_GATEWAY_PROVIDER` - Provider type: network, static, simple-cache
-- `VITE_WAYFINDER_GATEWAY_LIMIT` - Maximum gateways for routing (default: 5)
-- `VITE_WAYFINDER_STATIC_GATEWAYS` - Custom gateway list for static provider
-- `VITE_WAYFINDER_CACHE_TIMEOUT` - Gateway cache TTL in minutes (default: 1)
-- `VITE_WAYFINDER_VERIFICATION_STRATEGY` - Verification method: hash, none
-- `VITE_WAYFINDER_TRUSTED_GATEWAYS` - Gateways for hash verification
-- `VITE_WAYFINDER_VERIFICATION_TIMEOUT` - Verification timeout in milliseconds
-- `VITE_WAYFINDER_CU_URL` - Custom AO Compute Unit URL (default: https://cu.ardrive.io)
+**Telemetry Details** (v0.2.2+):
+- **Privacy-First**: Disabled by default, requires explicit user opt-in
+- **Anonymous Metrics**: Only collects performance data, no personal information
+- **10% Sample Rate**: When enabled, only 10% of requests are tracked
+- **OpenTelemetry Standard**: Industry-standard telemetry collection
+- **Collected Metrics**:
+  - Gateway routing performance (response times, success rates)
+  - Request success/failure rates (no content data)
+  - Aggregate performance metrics (no personal information)
+- **Never Collected**: Transaction IDs, content data, personal information, browsing history
+
+**Note**: Environment variables for Wayfinder configuration are no longer used. All configuration is done through the UI and persisted in localStorage.
 
 **Gateway Configuration**:
 App supports "self" gateway mapping that derives data gateway from current hostname (e.g., `roam_user.ardrive.net` → `ardrive.net`).

@@ -69,6 +69,7 @@ export function ChannelsDrawer({
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [customCuUrl, setCustomCuUrl] = useState(wayfinderSettings.cuUrl || '')
   const [cuUrlError, setCuUrlError] = useState('')
+  const [showTelemetryInfo, setShowTelemetryInfo] = useState(false)
   
   // Update customCuUrl when wayfinderSettings changes
   useEffect(() => {
@@ -237,6 +238,43 @@ export function ChannelsDrawer({
                     className={`toggle-btn ${wayfinderSettings.verifiedBrowsing ? 'active' : ''}`}
                     onClick={() => updateWayfinderSettings({ verifiedBrowsing: !wayfinderSettings.verifiedBrowsing })}
                     aria-label={`${wayfinderSettings.verifiedBrowsing ? 'Disable' : 'Enable'} verified browsing`}
+                  >
+                    <div className="toggle-indicator" />
+                  </button>
+                </div>
+
+                {/* Telemetry - Help Improve AR.IO Network */}
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <span className="setting-label">
+                      Help Improve AR.IO Network
+                      <button 
+                        className="info-btn"
+                        onClick={() => setShowTelemetryInfo(!showTelemetryInfo)}
+                        aria-label="Learn more about telemetry"
+                      >
+                        <Icons.Info size={14} />
+                      </button>
+                    </span>
+                    <span className="setting-description">
+                      Share anonymous routing metrics (10% sample)
+                    </span>
+                    {showTelemetryInfo && (
+                      <div className="telemetry-info">
+                        <p>When enabled, Roam shares anonymous performance data to help improve the AR.IO network:</p>
+                        <ul>
+                          <li>• Gateway routing performance</li>
+                          <li>• Request success/failure rates</li>
+                          <li>• Response times</li>
+                        </ul>
+                        <p><strong>No personal data, transaction IDs, or content information is ever shared.</strong></p>
+                      </div>
+                    )}
+                  </div>
+                  <button 
+                    className={`toggle-btn ${wayfinderSettings.telemetryEnabled ? 'active' : ''}`}
+                    onClick={() => updateWayfinderSettings({ telemetryEnabled: !wayfinderSettings.telemetryEnabled })}
+                    aria-label={`${wayfinderSettings.telemetryEnabled ? 'Disable' : 'Enable'} telemetry`}
                   >
                     <div className="toggle-indicator" />
                   </button>
