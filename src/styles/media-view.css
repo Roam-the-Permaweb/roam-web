@@ -551,6 +551,29 @@
   width: 100%;
 }
 
+/* Bounce animation for navigation boundaries */
+.media-container.bounce-start {
+  animation: bounceStart 0.4s ease-out;
+}
+
+@keyframes bounceStart {
+  0% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(15px);
+  }
+  50% {
+    transform: translateX(-8px);
+  }
+  75% {
+    transform: translateX(4px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
 /* Enhanced placeholder styling */
 .placeholder {
   margin: 2rem;

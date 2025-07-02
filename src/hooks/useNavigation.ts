@@ -70,7 +70,14 @@ export function useNavigation(callbacks: NavigationCallbacks) {
       if (prev) {
         setCurrentTx(prev)
       } else {
-        setError('No previous content.')
+        // User is at the beginning of history - trigger bounce animation
+        const mediaContainer = document.querySelector('.media-container')
+        if (mediaContainer) {
+          mediaContainer.classList.add('bounce-start')
+          setTimeout(() => {
+            mediaContainer.classList.remove('bounce-start')
+          }, 400)
+        }
       }
     } catch (e) {
       logger.error('Back failed', e)
