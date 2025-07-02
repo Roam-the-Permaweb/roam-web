@@ -108,6 +108,9 @@ export function App() {
   // Reset confirmation modal
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   
+  // Track current gateway for "Open in new tab" functionality
+  const [currentGateway, setCurrentGateway] = useState<string | null>(null)
+  
   // Session statistics tracking (now we use the hook directly)
   const sessionStats = useSessionStats(appState.currentTx)
   
@@ -271,7 +274,9 @@ export function App() {
   const handleOpenInNewTab = () => {
     if (!appState.currentTx) return
     const dataTxId = appState.currentTx.arfsMeta?.dataTxId || appState.currentTx.id
-    const url = `https://arweave.net/${dataTxId}`
+    // Use the current gateway if available, otherwise fall back to arweave.net
+    const gateway = currentGateway || 'https://arweave.net'
+    const url = `${gateway}/${dataTxId}`
     window.open(url, '_blank', 'noopener,noreferrer')
   }
   
@@ -396,6 +401,7 @@ export function App() {
               onDownload={handleDownload}
               onDetails={() => appState.setDetailsOpen(true)}
               onOpenInNewTab={handleOpenInNewTab}
+              onGatewayChange={setCurrentGateway}
             />
 
             {!appState.loading && (

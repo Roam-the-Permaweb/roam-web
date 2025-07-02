@@ -15,8 +15,10 @@ export interface ArNSRecord {
 export interface ArNSMetadata {
   name: string;
   resolvedTxId: string;
+  gatewayUrl: string;      // Gateway that resolved this name
   ttl?: number;
   validatedAt: number;
+  isDefaultId?: boolean;   // Flag for default IDs
 }
 
 export interface ArNSPaginatedResponse {

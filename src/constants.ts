@@ -54,6 +54,7 @@ export interface TxMeta {
     customTags: Record<string, string>;
   };
   arnsName?: string; // The ArNS name that resolved to this content
+  arnsGateway?: string; // The gateway that resolved the ArNS name
 }
 
 // --------------------------------------------------------------------------

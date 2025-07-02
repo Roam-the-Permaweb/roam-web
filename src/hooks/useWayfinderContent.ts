@@ -24,7 +24,8 @@ export function useWayfinderContent(
   path?: string,
   forceLoad?: boolean,
   contentType?: string,
-  size?: number
+  size?: number,
+  preferredGateway?: string
 ): UseWayfinderContentResult {
   const [result, setResult] = useState<UseWayfinderContentResult>({
     url: null,
@@ -105,7 +106,8 @@ export function useWayfinderContent(
           txId,
           path,
           contentType,
-          size
+          size,
+          preferredGateway
         }
 
         // Get content URL - pass forceLoad flag for size-aware loading
@@ -177,7 +179,7 @@ export function useWayfinderContent(
         pollInterval = null
       }
     }
-  }, [txId, path, forceLoad]) // Removed contentType and size to prevent unnecessary re-requests
+  }, [txId, path, forceLoad, preferredGateway]) // Include preferredGateway in dependencies
 
   return result
 }

@@ -83,6 +83,7 @@ export interface ContentRequest {
   headers?: Record<string, string>
   contentType?: string  // For size-aware loading decisions
   size?: number        // File size for threshold checking
+  preferredGateway?: string  // Gateway to use for ArNS content when verification is off
 }
 
 export interface ContentResponse {

@@ -51,6 +51,7 @@ export interface MediaViewProps {
   onShare?: () => void;
   onDownload?: () => void;
   onOpenInNewTab?: () => void;
+  onGatewayChange?: (gateway: string | null) => void;
 }
 
 export const MediaView = ({
@@ -62,7 +63,8 @@ export const MediaView = ({
   onCorrupt,
   onShare,
   onDownload,
-  onOpenInNewTab
+  onOpenInNewTab,
+  onGatewayChange
 }: MediaViewProps) => {
   const { id, tags } = txMeta;
 
@@ -82,7 +84,15 @@ export const MediaView = ({
   const [forceLoad, setForceLoad] = useState(false);
   
   // Use Wayfinder for content URL with size-aware loading
-  const wayfinderResult = useWayfinderContent(dataTxId, undefined, forceLoad, baseContentType, size);
+  // Pass ArNS gateway when available for consistent loading
+  const wayfinderResult = useWayfinderContent(
+    dataTxId, 
+    undefined, 
+    forceLoad, 
+    baseContentType, 
+    size,
+    txMeta.arnsGateway
+  );
   
   // Final content type: prefer Wayfinder's detected type, fallback to base
   const contentType = wayfinderResult.contentType || baseContentType;
@@ -157,6 +167,13 @@ useEffect(() => {
   
   return () => clearTimeout(timer);
 }, [id, contentType, size]);
+
+  // Notify parent component when gateway changes
+  useEffect(() => {
+    if (onGatewayChange && wayfinderResult.gateway) {
+      onGatewayChange(wayfinderResult.gateway);
+    }
+  }, [wayfinderResult.gateway, onGatewayChange]);
 
   // Handle Wayfinder content data and Object URL lifecycle
   useEffect(() => {

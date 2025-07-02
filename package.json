@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@ar.io/sdk": "latest",
-    "@ar.io/wayfinder-core": "alpha",
+    "@ar.io/wayfinder-core": "^1.0.0",
     "@permaweb/aoconnect": "0.0.68",
     "graphql-request": "^7.1.2",
     "idb-keyval": "^6.2.1",

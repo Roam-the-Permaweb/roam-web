@@ -241,6 +241,12 @@ async function fetchArNSWindow(): Promise<TxMeta[]> {
       break;
     }
     
+    // Double-check that it's not a default ID (should already be filtered by service)
+    if (arnsMetadata.isDefaultId) {
+      logger.debug(`Skipping default ID for ${arnsMetadata.name}`);
+      continue;
+    }
+    
     try {
       // Fetch the transaction metadata for the resolved ID
       const response = await fetch(`${GATEWAY_DATA_SOURCE[0]}/graphql`, {
@@ -269,12 +275,13 @@ async function fetchArNSWindow(): Promise<TxMeta[]> {
       
       if (result.data?.transaction) {
         const tx = result.data.transaction;
-        // Add ArNS name to the transaction metadata
+        // Add ArNS metadata to the transaction
         transactions.push({
           ...tx,
-          arnsName: arnsMetadata.name
+          arnsName: arnsMetadata.name,
+          arnsGateway: arnsMetadata.gatewayUrl  // Store gateway for content loading
         });
-        logger.debug(`Added ArNS transaction: ${arnsMetadata.name} -> ${arnsMetadata.resolvedTxId}`);
+        logger.debug(`Added ArNS transaction: ${arnsMetadata.name} -> ${arnsMetadata.resolvedTxId} via ${arnsMetadata.gatewayUrl}`);
       }
     } catch (error) {
       logger.error(`Failed to fetch transaction for ArNS ${arnsMetadata.name}:`, error);

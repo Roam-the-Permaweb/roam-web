@@ -89,6 +89,7 @@ export function useSimplifiedWayfinderSettings(): UseSimplifiedWayfinderSettings
 
     // Only update verification if it changed
     if ("verifiedBrowsing" in newSettings) {
+      logger.info("Updating verification setting to:", updatedSettings.verifiedBrowsing);
       configUpdate.verification = {
         enabled: updatedSettings.verifiedBrowsing,
         strategy: "hash",

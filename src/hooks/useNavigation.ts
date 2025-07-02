@@ -23,7 +23,7 @@ export function useNavigation(callbacks: NavigationCallbacks) {
   const blockRangeRef = useRef<{ min?: number; max?: number } | null>(null)
   const lastErrorTimeRef = useRef<number>(0)
   const consecutiveErrorsRef = useRef<number>(0)
-  const errorResetTimerRef = useRef<number | null>(null)
+  const errorResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   
   const {
     setCurrentTx,

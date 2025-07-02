@@ -2,46 +2,46 @@
  * Configuration management for Wayfinder
  */
 
-import type { WayfinderConfig } from '../wayfinderTypes'
-import { logger } from '../../utils/logger'
+import type { WayfinderConfig } from "../wayfinderTypes";
+import { logger } from "../../utils/logger";
 
 /**
  * Determine the fallback gateway based on current hostname
  */
 export function determineFallbackGateway(): string {
   try {
-    const hostname = window.location.hostname.toLowerCase()
+    const hostname = window.location.hostname.toLowerCase();
 
     // For ar.io domains, use arweave.net as fallback
-    if (hostname === 'roam.ar.io' || hostname.endsWith('.ar.io')) {
-      return 'https://arweave.net'
+    if (hostname === "roam.ar.io" || hostname.endsWith(".ar.io")) {
+      return "https://arweave.net";
     }
 
     // Extract gateway from roam.gateway.com pattern
-    if (hostname.startsWith('roam.')) {
-      const gatewayDomain = hostname.substring(5) // Remove 'roam.' prefix
-      return `https://${gatewayDomain}`
+    if (hostname.startsWith("roam.")) {
+      const gatewayDomain = hostname.substring(5); // Remove 'roam.' prefix
+      return `https://${gatewayDomain}`;
     }
 
     // Handle localhost and development scenarios
     if (
-      hostname === 'localhost' ||
-      hostname === '127.0.0.1' ||
-      hostname.startsWith('192.168.')
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname.startsWith("192.168.")
     ) {
-      return 'https://arweave.net'
+      return "https://arweave.net";
     }
 
     // For direct gateway hosting (e.g., permagate.io/roam)
-    if (hostname.includes('.')) {
-      return `https://${hostname}`
+    if (hostname.includes(".")) {
+      return `https://${hostname}`;
     }
 
     // Default fallback
-    return 'https://arweave.net'
+    return "https://arweave.net";
   } catch (error) {
-    logger.warn('Failed to determine fallback gateway from hostname:', error)
-    return 'https://arweave.net'
+    logger.warn("Failed to determine fallback gateway from hostname:", error);
+    return "https://arweave.net";
   }
 }
 
@@ -60,35 +60,35 @@ export const DEFAULT_CONFIG: WayfinderConfig = {
   // Routing configuration - Balanced mode (random from top 20)
   routing: {
     gatewayProvider: {
-      type: 'simple-cache',
+      type: "simple-cache",
       config: {
         cacheTimeoutMinutes: 60, // Cache for 1 hour
-        wrappedProvider: 'network',
+        wrappedProvider: "network",
         wrappedProviderConfig: {
-          sortBy: 'totalDelegatedStake',
-          sortOrder: 'desc',
+          sortBy: "totalDelegatedStake",
+          sortOrder: "desc",
           limit: 20, // Top 20 gateways for quality + distribution
         },
       },
     },
     strategy: {
-      strategy: 'random', // Random selection for load balancing
-      staticGateway: 'https://arweave.net',
-      preferredGateway: 'https://arweave.net',
+      strategy: "random", // Random selection for load balancing
+      staticGateway: "https://arweave.net",
+      preferredGateway: "https://arweave.net",
       timeoutMs: 500,
-      probePath: '/ar-io/info',
+      probePath: "/ar-io/info",
     },
   },
 
   // Verification configuration - disabled by default for performance
   verification: {
     enabled: false, // Off by default
-    strategy: 'hash',
+    strategy: "hash",
     gatewayProvider: {
-      type: 'network',
+      type: "network",
       config: {
-        sortBy: 'totalDelegatedStake',
-        sortOrder: 'desc',
+        sortBy: "totalDelegatedStake",
+        sortOrder: "desc",
         limit: 5, // Top 5 staked gateways for verification
       },
     },
@@ -102,10 +102,10 @@ export const DEFAULT_CONFIG: WayfinderConfig = {
 
   // Telemetry configuration - disabled by default for privacy
   telemetry: {
-    enabled: false,      // Opt-in only - user must explicitly enable
-    sampleRate: 0.1,     // 10% sample rate when enabled
+    enabled: false, // Opt-in only - user must explicitly enable
+    sampleRate: 0.1, // 10% sample rate when enabled
   },
-}
+};
 
 /**
  * Routing mode presets
@@ -113,90 +113,106 @@ export const DEFAULT_CONFIG: WayfinderConfig = {
 export const ROUTING_MODE_CONFIGS = {
   balanced: {
     gatewayProvider: {
-      type: 'simple-cache' as const,
+      type: "simple-cache" as const,
       config: {
         cacheTimeoutMinutes: 60,
-        wrappedProvider: 'network' as const,
+        wrappedProvider: "network" as const,
         wrappedProviderConfig: {
-          sortBy: 'totalDelegatedStake' as const,
-          sortOrder: 'desc' as const,
+          sortBy: "totalDelegatedStake" as const,
+          sortOrder: "desc" as const,
           limit: 20, // Top 20 for quality + distribution
         },
       },
     },
     strategy: {
-      strategy: 'random' as const,
-      staticGateway: 'https://arweave.net',
-      preferredGateway: 'https://arweave.net',
+      strategy: "random" as const,
+      staticGateway: "https://arweave.net",
+      preferredGateway: "https://arweave.net",
       timeoutMs: 500,
-      probePath: '/ar-io/info',
+      probePath: "/ar-io/info",
     },
   },
   fast: {
     gatewayProvider: {
-      type: 'simple-cache' as const,
+      type: "simple-cache" as const,
       config: {
         cacheTimeoutMinutes: 60,
-        wrappedProvider: 'network' as const,
+        wrappedProvider: "network" as const,
         wrappedProviderConfig: {
-          sortBy: 'totalDelegatedStake' as const,
-          sortOrder: 'desc' as const,
+          sortBy: "totalDelegatedStake" as const,
+          sortOrder: "desc" as const,
           limit: 10, // Smaller pool for faster ping testing
         },
       },
     },
     strategy: {
-      strategy: 'fastest-ping' as const,
-      staticGateway: 'https://arweave.net',
-      preferredGateway: 'https://arweave.net',
+      strategy: "fastest-ping" as const,
+      staticGateway: "https://arweave.net",
+      preferredGateway: "https://arweave.net",
       timeoutMs: 500,
-      probePath: '/ar-io/info',
+      probePath: "/ar-io/info",
     },
   },
-  'fair-share': {
+  "fair-share": {
     gatewayProvider: {
-      type: 'simple-cache' as const,
+      type: "simple-cache" as const,
       config: {
         cacheTimeoutMinutes: 60,
-        wrappedProvider: 'network' as const,
+        wrappedProvider: "network" as const,
         wrappedProviderConfig: {
-          sortBy: 'totalDelegatedStake' as const,
-          sortOrder: 'desc' as const,
+          sortBy: "totalDelegatedStake" as const,
+          sortOrder: "desc" as const,
           limit: 30, // Larger pool for better distribution
         },
       },
     },
     strategy: {
-      strategy: 'round-robin' as const,
-      staticGateway: 'https://arweave.net',
-      preferredGateway: 'https://arweave.net',
+      strategy: "round-robin" as const,
+      staticGateway: "https://arweave.net",
+      preferredGateway: "https://arweave.net",
       timeoutMs: 500,
-      probePath: '/ar-io/info',
+      probePath: "/ar-io/info",
     },
   },
-}
+};
 
 /**
  * Load configuration from localStorage
  */
 export function loadPersistedConfig(): Partial<WayfinderConfig> {
   try {
-    const stored = localStorage.getItem('wayfinder-config')
+    const stored = localStorage.getItem("wayfinder-config");
     if (stored) {
-      const parsed = JSON.parse(stored)
-      // Return the parsed config directly if it has the new structure
-      if (parsed.routing && parsed.verification) {
-        return parsed
+      const parsed = JSON.parse(stored);
+
+      // Validate the structure is correct
+      if (parsed.routing && parsed.routing.strategy) {
+        // Check if strategy has the correct structure
+        if (
+          typeof parsed.routing.strategy === "object" &&
+          "strategy" in parsed.routing.strategy
+        ) {
+          logger.debug("Loaded valid persisted config");
+          return parsed;
+        } else {
+          logger.warn(
+            "Invalid routing strategy structure in persisted config, ignoring"
+          );
+          // Clear invalid config
+          localStorage.removeItem("wayfinder-config");
+          return {};
+        }
       }
+
       // Handle legacy config with just enableWayfinder
-      if ('enableWayfinder' in parsed) {
-        return { enableWayfinder: parsed.enableWayfinder }
+      if ("enableWayfinder" in parsed) {
+        return { enableWayfinder: parsed.enableWayfinder };
       }
     }
   } catch (error) {
-    logger.warn('Failed to load persisted Wayfinder config:', error)
+    logger.warn("Failed to load persisted Wayfinder config:", error);
   }
-  return {}
+  return {};
 }
 
 /**
@@ -204,9 +220,9 @@ export function loadPersistedConfig(): Partial<WayfinderConfig> {
  */
 export function saveConfig(config: WayfinderConfig): void {
   try {
-    localStorage.setItem('wayfinder-config', JSON.stringify(config))
+    localStorage.setItem("wayfinder-config", JSON.stringify(config));
   } catch (error) {
-    logger.warn('Failed to save Wayfinder config:', error)
+    logger.warn("Failed to save Wayfinder config:", error);
   }
 }
 
@@ -214,26 +230,29 @@ export function saveConfig(config: WayfinderConfig): void {
  * Validate configuration for consistency
  */
 export function validateConfig(config: WayfinderConfig): WayfinderConfig {
-  const validated = { ...config }
+  const validated = { ...config };
 
   // Validate static routing configuration
   if (
-    validated.routing.strategy.strategy === 'static' &&
+    validated.routing.strategy.strategy === "static" &&
     !validated.routing.strategy.staticGateway
   ) {
-    validated.routing.strategy.staticGateway = 'https://arweave.net'
+    validated.routing.strategy.staticGateway = "https://arweave.net";
   }
 
   // Validate timeout values
   if (validated.verification.timeoutMs <= 0) {
-    validated.verification.timeoutMs = 30000
+    validated.verification.timeoutMs = 30000;
   }
 
-  if (validated.routing.strategy.timeoutMs && validated.routing.strategy.timeoutMs <= 0) {
-    validated.routing.strategy.timeoutMs = 500
+  if (
+    validated.routing.strategy.timeoutMs &&
+    validated.routing.strategy.timeoutMs <= 0
+  ) {
+    validated.routing.strategy.timeoutMs = 500;
   }
 
-  return validated
+  return validated;
 }
 
 /**
@@ -241,32 +260,32 @@ export function validateConfig(config: WayfinderConfig): WayfinderConfig {
  */
 export function getCurrentRoutingMode(
   config: WayfinderConfig
-): 'balanced' | 'fast' | 'fair-share' | 'custom' {
-  const { strategy, gatewayProvider } = config.routing
+): "balanced" | "fast" | "fair-share" | "custom" {
+  const { strategy, gatewayProvider } = config.routing;
 
   if (
-    strategy.strategy === 'random' &&
-    gatewayProvider.type === 'simple-cache' &&
+    strategy.strategy === "random" &&
+    gatewayProvider.type === "simple-cache" &&
     (gatewayProvider.config as any).wrappedProviderConfig?.limit === 20
   ) {
-    return 'balanced'
+    return "balanced";
   }
 
   if (
-    strategy.strategy === 'fastest-ping' &&
-    gatewayProvider.type === 'simple-cache' &&
-    (gatewayProvider.config as any).wrappedProviderConfig?.limit === 10
+    strategy.strategy === "fastest-ping" &&
+    gatewayProvider.type === "simple-cache" &&
+    (gatewayProvider.config as any).wrappedProviderConfig?.limit === 5
   ) {
-    return 'fast'
+    return "fast";
   }
 
   if (
-    strategy.strategy === 'round-robin' &&
-    gatewayProvider.type === 'simple-cache' &&
-    (gatewayProvider.config as any).wrappedProviderConfig?.limit === 30
+    strategy.strategy === "round-robin" &&
+    gatewayProvider.type === "simple-cache" &&
+    (gatewayProvider.config as any).wrappedProviderConfig?.limit === 50
   ) {
-    return 'fair-share'
+    return "fair-share";
   }
 
-  return 'custom'
+  return "custom";
 }

@@ -25,6 +25,12 @@ class ArNSService {
   private currentCursor: string | undefined;
   private hasMorePages = true;
   
+  // Default ArNS resolver IDs that should be filtered out
+  private readonly DEFAULT_IDS = new Set([
+    'oork_YifB3-JQQZg8EgMPQJytua_QCHKmMqt5kmnCo', // ArNS resolver
+    // Add other default IDs as needed
+  ]);
+  
   // Fetch strategies for variety
   private strategies: ArNSFetchStrategy[] = [
     { sortBy: 'startTimestamp', sortOrder: 'desc' }, // Newest names
@@ -36,6 +42,13 @@ class ArNSService {
   private readonly FETCH_COOLDOWN = 30000; // 30s between fetches
   private readonly PAGE_SIZE = 50; // Smaller pages for mobile
   private readonly VALIDATION_TIMEOUT = 5000; // 5s timeout for validation
+  
+  /**
+   * Check if a transaction ID is a default ID
+   */
+  isDefaultId(txId: string): boolean {
+    return this.DEFAULT_IDS.has(txId);
+  }
   
   /**
    * Get next validated ArNS name
@@ -57,7 +70,10 @@ class ArNSService {
    */
   private getFromValidatedCache(): ArNSMetadata | null {
     const validNames = Array.from(this.validatedNames.values())
-      .filter(meta => !this.seenNames.has(meta.name));
+      .filter(meta => 
+        !this.seenNames.has(meta.name) && 
+        !meta.isDefaultId  // Filter out default IDs
+      );
     
     if (validNames.length === 0) return null;
     
@@ -180,18 +196,43 @@ class ArNSService {
    */
   private async validateArNSName(name: string): Promise<string | null> {
     try {
-      // Get a gateway URL from Wayfinder
-      const wayfinderUrl = await wayfinderService.getContentUrl({ txId: name });
-      const gatewayUrl = wayfinderUrl.gateway || 'https://arweave.net';
+      // Use Wayfinder to resolve the ArNS name to a gateway URL
+      // This will handle the routing logic and return a resolved URL
+      const resolvedUrl = await wayfinderService.resolveArUrl(`ar://${name}`);
       
-      // Make HEAD request with timeout
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), this.VALIDATION_TIMEOUT);
+      if (!resolvedUrl) {
+        logger.warn('Failed to resolve ArNS name via Wayfinder, using fallback');
+        // Fallback to direct gateway if Wayfinder is not available
+        const fallbackGateway = wayfinderService.getFallbackGateway();
+        const fallbackDomain = new URL(fallbackGateway).hostname;
+        const fallbackUrl = `https://${name}.${fallbackDomain}`;
+        return this.validateWithUrl(name, fallbackUrl, fallbackGateway);
+      }
       
-      const response = await fetch(`${gatewayUrl}/${name}`, {
+      // Extract gateway URL from resolved URL
+      const gatewayUrl = new URL(resolvedUrl.toString()).origin;
+      return this.validateWithUrl(name, resolvedUrl.toString(), gatewayUrl);
+    } catch (error) {
+      logger.debug(`ArNS validation failed for ${name}:`, error);
+    }
+    
+    return null;
+  }
+  
+  /**
+   * Validate ArNS name with a specific URL
+   */
+  private async validateWithUrl(name: string, url: string, gatewayUrl: string): Promise<string | null> {
+    logger.debug(`Validating ArNS name ${name} using URL: ${url}`);
+    
+    // Make HEAD request with timeout
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.VALIDATION_TIMEOUT);
+    
+    try {
+      const response = await fetch(url, {
         method: 'HEAD',
         headers: { 
-          'x-roam-client': 'roam-arns',
           'Accept': '*/*'
         },
         signal: controller.signal
@@ -205,17 +246,30 @@ class ArNSService {
       if (resolvedId && response.ok) {
         logger.debug(`Validated ArNS name: ${name} -> ${resolvedId}`);
         
-        // Cache validation result
+        // Check if it's a default ID
+        const isDefault = this.isDefaultId(resolvedId);
+        if (isDefault) {
+          logger.debug(`Skipping default ID: ${resolvedId} for ArNS name: ${name}`);
+        }
+        
+        // Cache validation result (including default IDs for tracking)
         this.validatedNames.set(name, {
           name,
           resolvedTxId: resolvedId,
-          validatedAt: Date.now()
+          gatewayUrl,
+          validatedAt: Date.now(),
+          isDefaultId: isDefault
         });
         
         return resolvedId;
+      } else if (!response.ok) {
+        logger.warn(`ArNS validation failed for ${name}: HTTP ${response.status}`);
+      } else {
+        logger.warn(`ArNS name ${name} did not return x-arns-resolved-id header`);
       }
     } catch (error) {
-      logger.debug(`ArNS validation failed for ${name}:`, error);
+      clearTimeout(timeout);
+      throw error;
     }
     
     return null;
