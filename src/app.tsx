@@ -14,6 +14,7 @@
  */
 import { useEffect, useState, useRef } from 'preact/hooks'
 import { MediaView } from './components/MediaView'
+import { MediaViewErrorBoundary } from './components/ErrorBoundary'
 import { DetailsDrawer } from './components/DetailsDrawer'
 import { ZoomOverlay } from './components/ZoomOverlay'
 import { Interstitial } from './components/Interstitial'
@@ -36,10 +37,11 @@ import { useNavigation } from './hooks/useNavigation'
 import { useDateRangeSlider } from './hooks/useDateRangeSlider'
 import { useSwipeGesture } from './hooks/useSwipeGesture'
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
-import { usePreloading } from './hooks/usePreloading'
 import { useSessionStats } from './hooks/useSessionStats'
 import { useVerificationStatus } from './hooks/useVerificationStatus'
+import { useBackButtonState } from './hooks/useBackButtonState'
 import { logger } from './utils/logger'
+import { objectUrlManager } from './utils/objectUrlManager'
 import { MAX_AD_CLICKS, MIN_AD_CLICKS, DEFAULT_DATE_RANGE_DAYS, APP_SWIPE_THRESHOLD, APP_SWIPE_TIME_LIMIT } from './constants'
 import { wayfinderService } from './services/wayfinder'
 import './styles/app.css'
@@ -61,6 +63,26 @@ export function App() {
    * - useNavigation: Navigation logic and actions (next, back, share, download)
    * - useDateRangeSlider: Date-based filtering with block height resolution
    */
+   
+  // Log app initialization
+  useEffect(() => {
+    logger.info('🚀 Roam app initializing', {
+      version: '0.3.0',
+      platform: 'web',
+      timestamp: new Date().toISOString()
+    })
+    
+    // Set up periodic cleanup for old Object URLs
+    const cleanupInterval = setInterval(() => {
+      objectUrlManager.cleanupOld(60000); // Clean up URLs older than 1 minute
+    }, 30000); // Run every 30 seconds
+    
+    return () => {
+      clearInterval(cleanupInterval);
+      objectUrlManager.cleanupAll(); // Clean up all URLs on app unmount
+    };
+  }, [])
+  
   const consent = useConsent()
   const deepLink = useDeepLink()
   const appState = useAppState()
@@ -69,11 +91,17 @@ export function App() {
   useEffect(() => {
     const preInitializeWayfinder = async () => {
       try {
-        logger.debug('Pre-initializing Wayfinder service...')
+        logger.info('wayfinder.pre-init.start', { timestamp: Date.now() })
+        const startTime = Date.now()
         await wayfinderService.initialize()
-        logger.debug('Wayfinder pre-initialization complete')
+        logger.info('wayfinder.pre-init.complete', { 
+          duration: Date.now() - startTime,
+          initialized: true
+        })
       } catch (error) {
-        logger.warn('Wayfinder pre-initialization failed (non-critical):', error)
+        logger.warn('wayfinder.pre-init.failed', { 
+          error: error instanceof Error ? error.message : 'Unknown error' 
+        })
       }
     }
     
@@ -114,11 +142,25 @@ export function App() {
   // Session statistics tracking (now we use the hook directly)
   const sessionStats = useSessionStats(appState.currentTx)
   
+  // Track ad views when interstitial is shown
+  useEffect(() => {
+    if (appState.showInterstitial) {
+      logger.info('Tracking ad view - showInterstitial is true')
+      sessionStats.incrementAdsViewed()
+    }
+  }, [appState.showInterstitial, sessionStats.incrementAdsViewed])
+  
   // Track verification status for current transaction
   // For ArFS files, track the data transaction instead of metadata
   const verificationStatus = useVerificationStatus(
     appState.currentTx?.arfsMeta?.dataTxId || appState.currentTx?.id || null
   )
+  
+  // Track ArNS validation state
+  const [arnsValidating, setArnsValidating] = useState(false)
+  
+  // Track back button state
+  const canNavigateBack = useBackButtonState(appState.currentTx)
   
 
   // Navigation callbacks 
@@ -145,7 +187,7 @@ export function App() {
   const navigation = useNavigation(navigationCallbacks)
   
   // Interstitial ad management
-  const { recordClick, shouldShowInterstitial, reset } = useInterstitialInjector(MIN_AD_CLICKS, MAX_AD_CLICKS)
+  const { recordClick, shouldShowInterstitial, reset, clearPersistedData } = useInterstitialInjector(MIN_AD_CLICKS, MAX_AD_CLICKS)
   
   const handleCloseAd = () => {
     appState.setShowInterstitial(false)
@@ -269,14 +311,33 @@ export function App() {
     appState.appName
   )
   
-  const handleDownload = () => navigation.handleDownload(appState.currentTx)
+  const handleDownload = () => navigation.handleDownload(appState.currentTx, currentGateway)
   
   const handleOpenInNewTab = () => {
     if (!appState.currentTx) return
     const dataTxId = appState.currentTx.arfsMeta?.dataTxId || appState.currentTx.id
-    // Use the current gateway if available, otherwise fall back to arweave.net
-    const gateway = currentGateway || 'https://arweave.net'
-    const url = `${gateway}/${dataTxId}`
+    
+    let url: string
+    
+    // Handle ArNS names specially
+    if (appState.currentTx.arnsName && appState.currentTx.arnsGateway) {
+      // Check if the gateway URL already includes the ArNS subdomain
+      const gatewayUrl = new URL(appState.currentTx.arnsGateway)
+      if (gatewayUrl.hostname.startsWith(`${appState.currentTx.arnsName}.`)) {
+        // Gateway URL already has the ArNS subdomain
+        url = appState.currentTx.arnsGateway
+      } else {
+        // Need to add the ArNS subdomain
+        url = `https://${appState.currentTx.arnsName}.${gatewayUrl.hostname}`
+      }
+    } else {
+      // Use the current gateway if available, otherwise fall back to arweave.net
+      const gateway = currentGateway || 'https://arweave.net'
+      // Remove trailing slash from gateway if present
+      const gatewayBase = gateway.endsWith('/') ? gateway.slice(0, -1) : gateway
+      url = `${gatewayBase}/${dataTxId}`
+    }
+    
     window.open(url, '_blank', 'noopener,noreferrer')
   }
   
@@ -293,8 +354,19 @@ export function App() {
                   deepLink.deepLinkOpts?.ownerAddress != null
       
       if (!hasDeepLinkContent) {
+        logger.info('app.auto-start', { 
+          consent: consent.accepted,
+          deepLink: false,
+          channel: appState.channel
+        })
         setHasInitiallyLoaded(true)
         handleNext()
+      } else {
+        logger.info('app.deep-link-start', {
+          hasInitialTx: !!deepLink.deepLinkOpts?.initialTx,
+          hasOwner: !!deepLink.deepLinkOpts?.ownerAddress,
+          hasBlockRange: deepLink.deepLinkOpts?.minBlock != null
+        })
       }
     }
   }, [consent.accepted, hasInitiallyLoaded, appState.currentTx, appState.loading, deepLink.deepLinkParsed])
@@ -332,15 +404,31 @@ export function App() {
     onSessionStats: () => setShowSessionStats(true)
   })
 
-  // Preload next content for smooth browsing
-  usePreloading(appState.currentTx, appState.channel)
   
-  const handleApplyRange = () => dateRangeSlider.applyCustomDateRange(
-    appState.channel,
-    appState.ownerAddress,
-    appState.appName,
-    navigation.blockRangeRef
-  )
+  const handleApplyRange = () => {
+    // Check if block height mode is active
+    const blockHeightMode = localStorage.getItem('roam-block-height-mode') === 'true'
+    
+    if (blockHeightMode && dateRangeSlider.tempBlocks) {
+      // Use temp block range in block mode
+      dateRangeSlider.applyCustomBlockRange(
+        dateRangeSlider.tempBlocks.min,
+        dateRangeSlider.tempBlocks.max,
+        appState.channel,
+        appState.ownerAddress,
+        appState.appName,
+        navigation.blockRangeRef
+      )
+    } else {
+      // Use date range in date mode
+      dateRangeSlider.applyCustomDateRange(
+        appState.channel,
+        appState.ownerAddress,
+        appState.appName,
+        navigation.blockRangeRef
+      )
+    }
+  }
 
   // Reset confirmation handlers
   const handleResetClick = async () => {
@@ -351,6 +439,8 @@ export function App() {
     setShowResetConfirm(false)
     // Reset session statistics
     sessionStats.resetStats()
+    // Reset ad click tracking
+    clearPersistedData()
     // Reset navigation and seen content
     await navigation.handleReset(appState.channel)
   }
@@ -374,41 +464,56 @@ export function App() {
 
       {appState.zoomSrc && <ZoomOverlay src={appState.zoomSrc} onClose={() => appState.setZoomSrc(null)} />}
 
-      {appState.error && appState.error.includes('No content found') ? (
+      {appState.error && appState.error.includes('No content found') && !appState.loading && !appState.queueLoading ? (
         <NoContentScreen 
           message="We couldn't find any content matching your current filters"
           onRetry={handleNext}
           onOpenFilters={appState.openChannels}
         />
-      ) : appState.error ? (
+      ) : appState.error && !appState.loading ? (
         <div className="error">{appState.error}</div>
       ) : null}
 
-      <main ref={mainRef} className="media-container">
+      <main ref={mainRef} className={`media-container ${appState.loading || arnsValidating ? 'loading' : ''}`}>
         {/* Only show full loading screen when no content exists */}
         {(appState.loading || appState.queueLoading) && !appState.currentTx ? (
           <LoadingScreen />
         ) : appState.currentTx ? (
           <>
-            <MediaView
-              txMeta={appState.currentTx}
-              privacyOn={appState.privacyOn}
-              onPrivacyToggle={appState.togglePrivacy}
-              onZoom={(src) => appState.setZoomSrc(src)}
-              onCorrupt={handleCorrupt}
-              loading={appState.loading}
-              onShare={handleShare}
-              onDownload={handleDownload}
-              onDetails={() => appState.setDetailsOpen(true)}
-              onOpenInNewTab={handleOpenInNewTab}
-              onGatewayChange={setCurrentGateway}
-            />
+            <MediaViewErrorBoundary
+              onError={() => {
+                logger.error('MediaView error occurred');
+                // Optionally skip to next content on error
+                handleCorrupt();
+              }}
+            >
+              <MediaView
+                txMeta={appState.currentTx}
+                privacyOn={appState.privacyOn}
+                onPrivacyToggle={appState.togglePrivacy}
+                onZoom={(src) => appState.setZoomSrc(src)}
+                onCorrupt={handleCorrupt}
+                loading={appState.loading}
+                onShare={handleShare}
+                onDownload={handleDownload}
+                onDetails={() => appState.setDetailsOpen(true)}
+                onOpenInNewTab={handleOpenInNewTab}
+                onGatewayChange={setCurrentGateway}
+                onArnsValidated={(validatedTxMeta) => {
+                  // Update app state with validated ArNS metadata
+                  logger.info('[ArNS Metadata] Updating app state with resolved transaction metadata');
+                  appState.setCurrentTx(validatedTxMeta);
+                }}
+                onArnsValidationStateChange={setArnsValidating}
+              />
+            </MediaViewErrorBoundary>
 
             {!appState.loading && (
               <TransactionInfo 
                 txMeta={appState.currentTx} 
                 formattedTime={appState.formattedTime}
                 verificationStatus={verificationStatus}
+                currentGateway={currentGateway}
               />
             )}
           </>
@@ -431,8 +536,8 @@ export function App() {
           }
           appState.openChannels()
         }}
-        hasCurrentTx={!!appState.currentTx}
-        loading={appState.loading}
+        canGoBack={canNavigateBack}
+        loading={appState.loading || arnsValidating}
         queueLoading={appState.queueLoading}
       />
 
@@ -441,6 +546,8 @@ export function App() {
         txMeta={appState.currentTx}
         open={appState.detailsOpen}
         onClose={() => appState.setDetailsOpen(false)}
+        currentGateway={currentGateway}
+        verificationStatus={verificationStatus}
       />
 
       <ChannelsDrawer
@@ -459,6 +566,7 @@ export function App() {
         queueLoading={appState.queueLoading}
         isResolvingBlocks={dateRangeSlider.isResolvingBlocks}
         actualBlocks={dateRangeSlider.actualBlocks}
+        tempBlocks={dateRangeSlider.tempBlocks}
         onResetRange={dateRangeSlider.resetToSliderRange}
         onApplyRange={handleApplyRange}
         onBlockRangeEstimated={dateRangeSlider.handleBlockRangeEstimated}

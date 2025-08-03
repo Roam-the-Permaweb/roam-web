@@ -33,6 +33,7 @@ export function useDateRangeSlider(
   })
   const [blockRange, setBlockRange] = useState<{ min: number; max: number } | null>(null)
   const [actualBlocks, setActualBlocks] = useState<{ min: number; max: number } | null>(null) // Track actual blocks when syncing
+  const [tempBlocks, setTempBlocks] = useState<{ min: number; max: number } | null>(null) // Track temp blocks for block mode
   const [rangeError, setRangeError] = useState<string | null>(null)
   const [isResolvingBlocks, setIsResolvingBlocks] = useState(false)
   
@@ -118,7 +119,7 @@ export function useDateRangeSlider(
       // Clear seen IDs when applying custom range to allow fresh exploration
       clearSeenIds()
       
-      await initFetchQueue(
+      const actualRange = await initFetchQueue(
         { media: channel.media, recency: channel.recency, ownerAddress, appName },
         { 
           minBlock: resolvedBlockRange.minBlock, 
@@ -130,8 +131,8 @@ export function useDateRangeSlider(
       
       if (blockRangeRef) {
         blockRangeRef.current = { 
-          min: resolvedBlockRange.minBlock, 
-          max: resolvedBlockRange.maxBlock 
+          min: actualRange?.min || resolvedBlockRange.minBlock, 
+          max: actualRange?.max || resolvedBlockRange.maxBlock 
         }
       }
       
@@ -141,6 +142,19 @@ export function useDateRangeSlider(
       } else {
         await addHistory(tx)
         setCurrentTx(tx)
+        
+        // Update UI with the actual range used (may be expanded due to retries)
+        // Do this AFTER successful transaction fetch to avoid interfering with ArFS metadata loading
+        if (actualRange && (actualRange.min !== resolvedBlockRange.minBlock || actualRange.max !== resolvedBlockRange.maxBlock)) {
+          logger.info(`Range was expanded from ${resolvedBlockRange.minBlock}-${resolvedBlockRange.maxBlock} to ${actualRange.min}-${actualRange.max}`)
+          setBlockRange({ min: actualRange.min, max: actualRange.max })
+          setActualBlocks({ min: actualRange.min, max: actualRange.max })
+          
+          // Update main app's current block range state
+          if (setRangeSlider) {
+            setRangeSlider({ min: actualRange.min, max: actualRange.max })
+          }
+        }
       }
       
       closeChannels()
@@ -163,6 +177,8 @@ export function useDateRangeSlider(
   // Handle estimated block range updates from the DateRangeSlider component
   const handleBlockRangeEstimated = (minBlock: number, maxBlock: number) => {
     setBlockRange({ min: minBlock, max: maxBlock })
+    // Also update temp blocks for block mode
+    setTempBlocks({ min: minBlock, max: maxBlock })
   }
   
   // Custom setTempRange wrapper that clears actual blocks when user changes dates
@@ -201,6 +217,103 @@ export function useDateRangeSlider(
     setLastNDays(days)
   }
   
+  // Apply custom block range directly (for block height mode)
+  const applyCustomBlockRange = async (
+    minBlock: number,
+    maxBlock: number,
+    channel: Channel,
+    ownerAddress?: string,
+    appName?: string,
+    blockRangeRef?: { current: { min?: number; max?: number } | null }
+  ) => {
+    if (minBlock > maxBlock) {
+      setRangeError("Invalid range: start block must be less than or equal to end block")
+      return
+    }
+    
+    if (minBlock < 0 || maxBlock < 0) {
+      setRangeError("Block numbers must be positive")
+      return
+    }
+    
+    setQueueLoading(true)
+    setRangeError(null)
+    setIsResolvingBlocks(true)
+    
+    try {
+      logger.debug('Applying custom block range:', { minBlock, maxBlock })
+      
+      // Update block range state
+      setBlockRange({ min: minBlock, max: maxBlock })
+      setActualBlocks({ min: minBlock, max: maxBlock })
+      setCurrentTx(null)
+      
+      // Update main app's current block range state
+      if (setRangeSlider) {
+        setRangeSlider({ min: minBlock, max: maxBlock })
+      }
+      
+      // Clear seen IDs when applying custom range
+      clearSeenIds()
+      
+      const actualRange = await initFetchQueue(
+        { media: channel.media, recency: channel.recency, ownerAddress, appName },
+        { 
+          minBlock: minBlock, 
+          maxBlock: maxBlock, 
+          ownerAddress, 
+          appName 
+        }
+      )
+      
+      if (blockRangeRef) {
+        blockRangeRef.current = { 
+          min: actualRange?.min || minBlock, 
+          max: actualRange?.max || maxBlock 
+        }
+      }
+      
+      const tx = await getNextTx(channel)
+      if (!tx) {
+        setError("No items found within this block range.")
+      } else {
+        await addHistory(tx)
+        setCurrentTx(tx)
+        
+        // Update UI with the actual range used (may be expanded due to retries)
+        // Do this AFTER successful transaction fetch to avoid interfering with ArFS metadata loading
+        if (actualRange && (actualRange.min !== minBlock || actualRange.max !== maxBlock)) {
+          logger.info(`Block range was expanded from ${minBlock}-${maxBlock} to ${actualRange.min}-${actualRange.max}`)
+          setBlockRange({ min: actualRange.min, max: actualRange.max })
+          setActualBlocks({ min: actualRange.min, max: actualRange.max })
+          
+          // Update main app's current block range state
+          if (setRangeSlider) {
+            setRangeSlider({ min: actualRange.min, max: actualRange.max })
+          }
+        }
+      }
+      
+      // Try to get estimated dates for the block range (non-blocking)
+      getDateRangeForBlockRange(minBlock, maxBlock).then(dateRange => {
+        if (dateRange) {
+          setDateRange({ start: dateRange.startDate, end: dateRange.endDate })
+          setTempRange({ start: dateRange.startDate, end: dateRange.endDate })
+        }
+      }).catch(err => {
+        logger.warn('Failed to get dates for block range:', err)
+      })
+      
+      closeChannels()
+    } catch (err) {
+      logger.error('Failed to apply custom block range:', err)
+      setRangeError("Couldn't apply custom block range.")
+    } finally {
+      setQueueLoading(false)
+      setIsResolvingBlocks(false)
+    }
+  }
+  
   // Sync date range with current block range (called when channels drawer opens)
   const syncWithCurrentBlockRange = async (minBlock: number, maxBlock: number) => {
     try {
@@ -215,6 +328,9 @@ export function useDateRangeSlider(
         
         // Store the actual blocks so DateRangeSlider can use them instead of estimating
         setActualBlocks({ min: minBlock, max: maxBlock })
+        
+        // Also set temp blocks for block mode
+        setTempBlocks({ min: minBlock, max: maxBlock })
         
         // Date slider synced with actual date range
       }
@@ -233,6 +349,8 @@ export function useDateRangeSlider(
     // Block range state (computed from dates)
     blockRange,
     actualBlocks, // Actual blocks when syncing (to avoid estimation)
+    tempBlocks, // Temp blocks for block mode
+    setTempBlocks,
     
     // Error and loading state
     rangeError,
@@ -242,6 +360,7 @@ export function useDateRangeSlider(
     // Actions
     resetToSliderRange,
     applyCustomDateRange,
+    applyCustomBlockRange, // New method for block height mode
     updateRanges,
     handleBlockRangeEstimated,
     

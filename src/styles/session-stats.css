@@ -116,6 +116,13 @@
   font-weight: 500;
 }
 
+.stat-sublabel {
+  color: #888;
+  font-size: 11px;
+  font-weight: 400;
+  margin-top: 2px;
+}
+
 .stat-header {
   display: flex;
   align-items: center;
@@ -194,48 +201,126 @@
 /* Mobile Responsive */
 @media (max-width: 768px) {
   .session-stats-overlay {
-    padding: 10px;
+    padding: 0;
   }
   
   .session-stats-panel {
-    max-height: 95vh;
+    max-height: 100vh;
+    max-width: 100%;
+    margin: 0;
+    border-radius: 0;
+    border: none;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
   }
   
   .session-stats-header {
-    padding: 16px 16px 12px;
+    padding: 20px 16px 16px;
+    position: sticky;
+    top: 0;
+    background: rgba(20, 20, 20, 0.98);
+    backdrop-filter: blur(10px);
+    z-index: 10;
+    flex-shrink: 0;
+  }
+  
+  .session-stats-header h2 {
+    font-size: 20px;
   }
   
   .session-stats-content {
     padding: 16px;
+    padding-bottom: 32px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    flex: 1;
   }
   
   .stats-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
     gap: 12px;
   }
   
   .stat-card {
     padding: 16px;
     gap: 12px;
+    min-height: 90px;
+  }
+  
+  .stat-card.wide {
+    grid-column: 1 / -1;
+  }
+  
+  .stat-icon {
+    display: none;
   }
   
   .stat-value {
-    font-size: 20px;
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  
+  .stat-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
   
   .content-types {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
     gap: 8px;
   }
   
   .content-type-item {
-    min-width: 80px;
-    padding: 6px 10px;
+    min-width: unset;
+    padding: 8px;
+    flex-direction: column;
+    text-align: center;
+    gap: 2px;
+  }
+  
+  .content-type-name {
+    font-size: 11px;
+    margin-right: 0;
+    margin-bottom: 2px;
+    display: block;
+  }
+  
+  .content-type-count {
+    font-size: 16px;
+    display: block;
   }
   
   .time-range-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 6px;
+    border: 1px solid rgba(255, 106, 0, 0.15);
+  }
+  
+  .time-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  
+  .time-value {
+    font-size: 14px;
+  }
+  
+  .time-value small {
+    display: block;
+    margin-top: 2px;
+    margin-left: 0;
+  }
+  
+  .close-btn {
+    padding: 12px;
+    margin: -8px;
   }
 }
 

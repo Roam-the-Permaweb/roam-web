@@ -32,7 +32,12 @@ import {
   CheckCircle,
   AlertTriangle,
   Settings,
-  RotateCcw
+  RotateCcw,
+  Hash,
+  AlertCircle,
+  RefreshCw,
+  Twitter,
+  Github
 } from 'lucide-preact'
 
 interface IconProps {
@@ -113,7 +118,21 @@ export const Icons = {
   // Advanced settings icons
   Settings: (props: IconProps) => <Settings size={16} {...props} />,
   RotateCcw: (props: IconProps) => <RotateCcw size={16} {...props} />,
-  ChevronDown: (props: IconProps) => <ChevronDown size={16} {...props} />
+  ChevronDown: (props: IconProps) => <ChevronDown size={16} {...props} />,
+  
+  // Block height icon
+  Hash: (props: IconProps) => <Hash size={16} {...props} />,
+  
+  // Session stats icon
+  Zap: (props: IconProps) => <Zap size={16} {...props} />,
+  
+  // Error handling icons
+  AlertCircle: (props: IconProps) => <AlertCircle size={20} {...props} />,
+  Refresh: (props: IconProps) => <RefreshCw size={16} {...props} />,
+  
+  // Social media icons
+  Twitter: (props: IconProps) => <Twitter size={16} {...props} />,
+  Github: (props: IconProps) => <Github size={16} {...props} />
 }
 
 // Helper function to get media type icon

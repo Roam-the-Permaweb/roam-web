@@ -246,7 +246,7 @@ export async function findBlockForTimestamp(timestamp: number): Promise<number> 
 }
 
 // Get current block info with caching
-async function getCurrentBlockInfo(): Promise<{ block: number; timestamp: number }> {
+export async function getCurrentBlockInfo(): Promise<{ block: number; timestamp: number }> {
   // Use cached value if it's less than 10 minutes old
   if (currentBlockAnchor && (Date.now() - currentBlockAnchor.timestamp < 10 * 60 * 1000)) {
     return currentBlockAnchor
@@ -272,6 +272,22 @@ export async function initializeCurrentAnchor(): Promise<void> {
     logger.debug('Initialized current block info cache')
   } catch (error) {
     logger.warn('Failed to initialize current block info, will use fallback:', error)
+  }
+}
+
+// Estimate date from block height
+export async function estimateDateFromBlock(blockHeight: number): Promise<Date> {
+  // Try to get current block info for more accurate estimation
+  try {
+    const currentInfo = await getCurrentBlockInfo()
+    const blockDiff = currentInfo.block - blockHeight
+    const timeDiff = blockDiff * AVERAGE_BLOCK_TIME_MS
+    const estimatedTime = currentInfo.timestamp - timeDiff
+    return new Date(estimatedTime)
+  } catch (_error) {
+    // Fallback to simple calculation from genesis
+    const estimatedMs = ARWEAVE_GENESIS_DATE.getTime() + (blockHeight * AVERAGE_BLOCK_TIME_MS)
+    return new Date(estimatedMs)
   }
 }
 
@@ -403,7 +419,7 @@ async function fetchBlocksRange(minHeight: number, maxHeight: number): Promise<{
       
       // Check for GraphQL errors
       if (json.errors?.length) {
-        logger.warn(`GraphQL errors for blocks range ${minHeight}-${maxHeight}:`, json.errors.map((e: any) => e.message).join('; '))
+        logger.warn(`GraphQL errors for blocks range ${minHeight}-${maxHeight}:`, json.errors.map((e: { message: string }) => e.message).join('; '))
         continue
       }
       
@@ -508,7 +524,7 @@ async function fetchBlockInfo(height: number): Promise<{ height: number; timesta
       const json = await response.json()
       
       if (json.errors?.length) {
-        logger.warn(`GraphQL errors for block ${height}:`, json.errors.map((e: any) => e.message).join('; '))
+        logger.warn(`GraphQL errors for block ${height}:`, json.errors.map((e: { message: string }) => e.message).join('; '))
         continue
       }
       

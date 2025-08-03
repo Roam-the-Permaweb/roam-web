@@ -1,8 +1,8 @@
-# Roam v0.2.0
+# Roam v0.3.0
 
-> A beautifully crafted, shuffle-play interface for exploring the infinite Permaweb with **AR.IO Wayfinder integration**.
+> A beautifully crafted, shuffle-play interface for exploring the infinite Permaweb with **AR.IO Wayfinder Core 1.0.0** and **ArNS discovery**.
 
-**Roam** is a premium, mobile-first PWA that lets you discover random Arweave content—images, videos, music, websites, documents, and ArFS files—through an elegant, Apple-inspired interface with **verified content delivery**. Just tap "Next" and let serendipity guide your digital journey through the **secure, verified Permaweb**.
+**Roam** is a premium, mobile-first PWA that lets you discover random Arweave content—images, videos, music, websites, documents, ArFS files, and ArNS names—through an elegant, Apple-inspired interface with **verified content delivery**. Just tap "Next" and let serendipity guide your digital journey through the **secure, verified Permaweb**.
 
 **Pure, decentralized content discovery with cryptographic verification.**
 
@@ -16,14 +16,21 @@
 
 ---
 
-## ✨ v0.2.0 Features - AR.IO Wayfinder Integration
+## ✨ v0.3.0 Features - ArNS Discovery & Wayfinder Core 1.0.0
 
-### 🔐 **Content Verification & Security**
-- **AR.IO Wayfinder integration** for cryptographic content verification
-- **Hash-based verification** via trusted gateways (permagate.io, vilenarios.com)
-- **Real-time verification status** with visual indicators (green checkmark, loading spinner)
-- **Secure content delivery** through verified blob serving
-- **Dynamic gateway routing** with AR.IO network stake-based selection
+### 🌐 **ArNS Name Discovery**
+- **Human-readable names** - Browse content via ArNS names like `myapp.arweave.net`
+- **International support** - Punycode decoding for names like `ñol.arweave.net`
+- **Smart URL handling** - Proper subdomain resolution for web apps and manifests
+- **Lazy validation** - Efficient ArNS resolution with background processing
+- **Beautiful display** - Clean rendering with Unicode support
+
+### 🔐 **Enhanced Verification System**
+- **Wayfinder Core 1.0.0** - Latest stable version with improved performance
+- **Multi-gateway verification** - Content verified against top 5 staked gateways
+- **Independent strategies** - Separate routing and verification for optimal security
+- **Dynamic gateway selection** - Based on totalDelegatedStake for maximum trust
+- **Real-time status updates** - Live verification feedback in UI
 
 ### 🚀 **Intelligent Content Caching**
 - **Smart content caching** with TTL and LRU-based cleanup
@@ -39,11 +46,17 @@
 - **Text**: Auto-load up to 10MB, manual button for larger files
 - **Forced loading**: Manual buttons trigger verified Wayfinder fetch
 
-### 🛡 **Enhanced Security Features**
-- **No double-fetching** - single verified fetch per content item
-- **Transparent verification** - subtle UI that doesn't disrupt browsing
-- **Fallback mechanisms** - graceful degradation to direct gateways
-- **Memory leak prevention** - proper cleanup and resource management
+### 📊 **Block Height Filtering**
+- **Direct block navigation** - Filter content by specific Arweave block ranges
+- **Enhanced date conversion** - Improved date-to-block height resolution
+- **Advanced filtering** - Combine blocks with content type and creator filters
+- **Historical exploration** - Navigate specific periods in Arweave history
+
+### 📈 **Advanced Session Analytics**
+- **Comprehensive metrics** - Track ArNS content, verification rates, and gateway performance
+- **Content type breakdown** - Analytics for images, videos, music, websites, text, and ArNS
+- **Performance insights** - Monitor gateway response times and success rates
+- **Export capabilities** - Session data available for analysis and sharing
 
 ---
 

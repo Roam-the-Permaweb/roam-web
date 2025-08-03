@@ -1,4 +1,5 @@
 import { useEffect } from 'preact/hooks'
+import { logger } from '../utils/logger'
 
 interface KeyboardShortcutsConfig {
   onNext: () => void
@@ -25,13 +26,15 @@ export function useKeyboardShortcuts(config: KeyboardShortcutsConfig) {
         return
       }
 
-      // Prevent default for our handled keys
-      const handledKeys = [
-        ' ', 'Enter', 'Backspace', 'ArrowLeft', 'ArrowRight', 
-        's', 'd', 'f', 'c', 'Escape', 'p', 't', '?'
-      ]
+      // Don't trigger shortcuts when modifier keys are pressed (for copy/paste etc)
+      if (event.ctrlKey || event.metaKey || event.altKey) {
+        return
+      }
+
+      // Only prevent default for navigation keys and escape
+      const navigationKeys = [' ', 'Enter', 'Backspace', 'ArrowLeft', 'ArrowRight', 'Escape']
       
-      if (handledKeys.includes(event.key) || handledKeys.includes(event.code)) {
+      if (navigationKeys.includes(event.key)) {
         event.preventDefault()
       }
 
@@ -86,26 +89,8 @@ export function useKeyboardShortcuts(config: KeyboardShortcutsConfig) {
           break
           
         case '?':
-          // Show help - we can implement this later
-          console.log(`
-🎮 Roam Keyboard Shortcuts:
-
-Navigation:
-  Space/Enter/→  Next content
-  Backspace/←    Previous content
-  
-Actions:  
-  S              Share current content
-  D              Download current content
-  C              Open channels/filters
-  P              Toggle privacy screen
-  F              Fullscreen mode
-  T              Session statistics
-  
-General:
-  Escape         Close overlays
-  ?              Show this help
-          `)
+          // Show help
+          logger.info('🎮 Roam Keyboard Shortcuts:\n\nNavigation:\n  Space/Enter/→  Next content\n  Backspace/←    Previous content\n  \nActions:  \n  S              Share current content\n  D              Download current content\n  C              Open channels/filters\n  P              Toggle privacy screen\n  F              Fullscreen mode\n  T              Session statistics\n  \nGeneral:\n  Escape         Close overlays\n  ?              Show this help')
           break
       }
     }

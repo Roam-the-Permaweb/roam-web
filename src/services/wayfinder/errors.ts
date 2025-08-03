@@ -2,7 +2,7 @@
  * Custom error types for Wayfinder integration
  */
 
-export const WayfinderErrorType = {
+export const WayfinderErrorTypes = {
   NETWORK_ERROR: 'NETWORK_ERROR',
   GATEWAY_ERROR: 'GATEWAY_ERROR',
   VERIFICATION_ERROR: 'VERIFICATION_ERROR',
@@ -11,62 +11,65 @@ export const WayfinderErrorType = {
   INITIALIZATION_ERROR: 'INITIALIZATION_ERROR',
 } as const
 
-export type WayfinderErrorType = typeof WayfinderErrorType[keyof typeof WayfinderErrorType]
+export type WayfinderErrorType = typeof WayfinderErrorTypes[keyof typeof WayfinderErrorTypes]
 
 export class WayfinderError extends Error {
   type: WayfinderErrorType
   originalError?: unknown
+  attemptedGateways?: string[]
 
   constructor(
     type: WayfinderErrorType,
     message: string,
-    originalError?: unknown
+    originalError?: unknown,
+    attemptedGateways?: string[]
   ) {
     super(message)
     this.type = type
     this.originalError = originalError
+    this.attemptedGateways = attemptedGateways
     this.name = 'WayfinderError'
   }
 }
 
 export class NetworkError extends WayfinderError {
-  constructor(message: string, originalError?: unknown) {
-    super(WayfinderErrorType.NETWORK_ERROR, message, originalError)
+  constructor(message: string, originalError?: unknown, attemptedGateways?: string[]) {
+    super(WayfinderErrorTypes.NETWORK_ERROR, message, originalError, attemptedGateways)
     this.name = 'NetworkError'
   }
 }
 
 export class GatewayError extends WayfinderError {
-  constructor(message: string, originalError?: unknown) {
-    super(WayfinderErrorType.GATEWAY_ERROR, message, originalError)
+  constructor(message: string, originalError?: unknown, attemptedGateways?: string[]) {
+    super(WayfinderErrorTypes.GATEWAY_ERROR, message, originalError, attemptedGateways)
     this.name = 'GatewayError'
   }
 }
 
 export class VerificationError extends WayfinderError {
-  constructor(message: string, originalError?: unknown) {
-    super(WayfinderErrorType.VERIFICATION_ERROR, message, originalError)
+  constructor(message: string, originalError?: unknown, attemptedGateways?: string[]) {
+    super(WayfinderErrorTypes.VERIFICATION_ERROR, message, originalError, attemptedGateways)
     this.name = 'VerificationError'
   }
 }
 
 export class TimeoutError extends WayfinderError {
-  constructor(message: string, originalError?: unknown) {
-    super(WayfinderErrorType.TIMEOUT_ERROR, message, originalError)
+  constructor(message: string, originalError?: unknown, attemptedGateways?: string[]) {
+    super(WayfinderErrorTypes.TIMEOUT_ERROR, message, originalError, attemptedGateways)
     this.name = 'TimeoutError'
   }
 }
 
 export class ConfigurationError extends WayfinderError {
   constructor(message: string, originalError?: unknown) {
-    super(WayfinderErrorType.CONFIGURATION_ERROR, message, originalError)
+    super(WayfinderErrorTypes.CONFIGURATION_ERROR, message, originalError)
     this.name = 'ConfigurationError'
   }
 }
 
 export class InitializationError extends WayfinderError {
   constructor(message: string, originalError?: unknown) {
-    super(WayfinderErrorType.INITIALIZATION_ERROR, message, originalError)
+    super(WayfinderErrorTypes.INITIALIZATION_ERROR, message, originalError)
     this.name = 'InitializationError'
   }
 }

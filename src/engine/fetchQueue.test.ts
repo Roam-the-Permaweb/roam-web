@@ -29,7 +29,7 @@ describe('FetchQueue Engine', () => {
 
     it('should initialize queue with transactions', async () => {
       const mockResult = { txs: [mockTxMeta], hasMore: false }
-      ;(fetchTxsRange as any).mockResolvedValue(mockResult)
+      ;(fetchTxsRange as ReturnType<typeof vi.fn>).mockResolvedValue(mockResult)
 
       const result = await initFetchQueue(mockChannel)
 
@@ -45,7 +45,7 @@ describe('FetchQueue Engine', () => {
         maxBlock: 1005000 // smaller range that fits in WINDOW_SIZE
       }
 
-      ;(fetchTxsRange as any).mockResolvedValue({ txs: [mockTxMeta], hasMore: false })
+      ;(fetchTxsRange as ReturnType<typeof vi.fn>).mockResolvedValue({ txs: [mockTxMeta], hasMore: false })
 
       const result = await initFetchQueue(mockChannel, options)
 
@@ -59,7 +59,7 @@ describe('FetchQueue Engine', () => {
         ownerAddress: 'test-owner-address'
       }
 
-      ;(fetchTxsRange as any).mockResolvedValue({ txs: [mockTxMeta], hasMore: false })
+      ;(fetchTxsRange as ReturnType<typeof vi.fn>).mockResolvedValue({ txs: [mockTxMeta], hasMore: false })
 
       await initFetchQueue(channelWithOwner)
 
@@ -79,7 +79,7 @@ describe('FetchQueue Engine', () => {
         appName: 'TestApp'
       }
 
-      ;(fetchTxsRange as any).mockResolvedValue({ txs: [mockTxMeta], hasMore: false })
+      ;(fetchTxsRange as ReturnType<typeof vi.fn>).mockResolvedValue({ txs: [mockTxMeta], hasMore: false })
 
       await initFetchQueue(mockChannel, options)
 

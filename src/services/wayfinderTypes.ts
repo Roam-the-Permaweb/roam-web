@@ -7,7 +7,14 @@ export interface VerificationStatus {
   verificationMethod?: string
   error?: string
   timestamp: number
+  progress?: {
+    processedBytes: number
+    totalBytes: number
+    percentage: number
+    stage: 'routing' | 'downloading' | 'verifying'
+  }
 }
+
 
 // Gateway provider configuration types
 export interface NetworkProviderConfig {
@@ -78,7 +85,7 @@ export interface WayfinderConfig {
 }
 
 export interface ContentRequest {
-  txId: string
+  txId: string  // Can be transaction ID or full URL (for ArNS content)
   path?: string
   headers?: Record<string, string>
   contentType?: string  // For size-aware loading decisions
@@ -112,6 +119,7 @@ export type VerificationEventType =
   | 'verification-progress' 
   | 'verification-completed'
   | 'verification-failed'
+  | 'routing-started'
   | 'routing-succeeded'
   | 'routing-failed'
 
@@ -119,7 +127,12 @@ export interface VerificationEvent {
   type: VerificationEventType
   txId: string
   gateway?: string
-  progress?: number
   error?: string
   timestamp: number
+  progress?: {
+    processedBytes: number
+    totalBytes: number
+    percentage: number
+    stage: 'routing' | 'downloading' | 'verifying'
+  }
 }

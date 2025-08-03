@@ -27,7 +27,7 @@ describe('History Engine', () => {
   describe('addHistory', () => {
     it('should add transaction to history', async () => {
       const mockHistory = { index: -1, items: [] }
-      ;(get as any).mockResolvedValue(mockHistory)
+      ;(get as ReturnType<typeof vi.fn>).mockResolvedValue(mockHistory)
 
       await addHistory(mockTxMeta)
 
@@ -43,7 +43,7 @@ describe('History Engine', () => {
         index: 0, 
         items: [existingTx, { ...mockTxMeta, id: 'forward-tx' }] 
       }
-      ;(get as any).mockResolvedValue(mockHistory)
+      ;(get as ReturnType<typeof vi.fn>).mockResolvedValue(mockHistory)
 
       await addHistory(mockTxMeta)
 
@@ -61,7 +61,7 @@ describe('History Engine', () => {
         index: 1, 
         items: [prevTx, mockTxMeta] 
       }
-      ;(get as any).mockResolvedValue(mockHistory)
+      ;(get as ReturnType<typeof vi.fn>).mockResolvedValue(mockHistory)
 
       const result = await goBack()
 
@@ -74,7 +74,7 @@ describe('History Engine', () => {
 
     it('should return undefined when at beginning of history', async () => {
       const mockHistory = { index: 0, items: [mockTxMeta] }
-      ;(get as any).mockResolvedValue(mockHistory)
+      ;(get as ReturnType<typeof vi.fn>).mockResolvedValue(mockHistory)
 
       const result = await goBack()
 
@@ -89,7 +89,7 @@ describe('History Engine', () => {
         index: 0, 
         items: [mockTxMeta, nextTx] 
       }
-      ;(get as any).mockResolvedValue(mockHistory)
+      ;(get as ReturnType<typeof vi.fn>).mockResolvedValue(mockHistory)
 
       const result = await goForward()
 
@@ -102,7 +102,7 @@ describe('History Engine', () => {
 
     it('should return undefined when at end of history', async () => {
       const mockHistory = { index: 0, items: [mockTxMeta] }
-      ;(get as any).mockResolvedValue(mockHistory)
+      ;(get as ReturnType<typeof vi.fn>).mockResolvedValue(mockHistory)
 
       const result = await goForward()
 
@@ -117,7 +117,7 @@ describe('History Engine', () => {
         index: 0, 
         items: [mockTxMeta, nextTx] 
       }
-      ;(get as any).mockResolvedValue(mockHistory)
+      ;(get as ReturnType<typeof vi.fn>).mockResolvedValue(mockHistory)
 
       const result = await peekForward()
 
@@ -127,7 +127,7 @@ describe('History Engine', () => {
 
     it('should return undefined when no forward history', async () => {
       const mockHistory = { index: 0, items: [mockTxMeta] }
-      ;(get as any).mockResolvedValue(mockHistory)
+      ;(get as ReturnType<typeof vi.fn>).mockResolvedValue(mockHistory)
 
       const result = await peekForward()
 

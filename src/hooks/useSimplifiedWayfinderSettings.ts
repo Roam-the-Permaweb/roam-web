@@ -2,7 +2,7 @@ import { useState, useEffect } from "preact/hooks";
 import { wayfinderService } from "../services/wayfinder";
 import { logger } from "../utils/logger";
 
-export type RoutingMode = "balanced" | "fast" | "fair-share";
+export type RoutingMode = "balanced" | "fast" | "fair-share" | "self";
 
 interface SimplifiedWayfinderSettings {
   enabled: boolean;
@@ -41,7 +41,7 @@ export function useSimplifiedWayfinderSettings(): UseSimplifiedWayfinderSettings
 
         setSettings({
           enabled: config.enableWayfinder,
-          routingMode: currentMode === "custom" ? "balanced" : currentMode,
+          routingMode: currentMode === "custom" ? "balanced" : currentMode as RoutingMode,
           verifiedBrowsing: config.verification.enabled,
           telemetryEnabled: config.telemetry.enabled,
           cuUrl: config.ao?.cuUrl,
@@ -79,7 +79,7 @@ export function useSimplifiedWayfinderSettings(): UseSimplifiedWayfinderSettings
       wayfinderService.applyRoutingMode(newSettings.routingMode);
     }
 
-    // Build config update
+    // Build Wayfinder config update
     const configUpdate: any = {};
 
     // Only update enabled state if it changed

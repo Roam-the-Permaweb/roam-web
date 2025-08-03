@@ -26,6 +26,7 @@ import { logger } from "../utils/logger";
 import { learnFromBlockRange } from "../utils/dateBlockUtils";
 import { get as idbGet, set as idbSet } from "idb-keyval";
 import { arnsService } from "../services/arns";
+import { wayfinderService } from "../services/wayfinder";
 import {
   type TxMeta,
   type Channel,
@@ -95,6 +96,7 @@ let queue: TxMeta[] = [];
 
 /** Prevent concurrent background refills */
 let isRefilling = false;
+
 
 /** Simple mutex for queue operations to prevent race conditions */
 class Mutex {
@@ -224,78 +226,60 @@ async function fetchWindow(
 }
 
 /**
- * Fetch ArNS-resolved transactions
+ * Fetch ArNS names without validation (validation happens on-demand)
  */
 async function fetchArNSWindow(): Promise<TxMeta[]> {
   const transactions: TxMeta[] = [];
   const targetCount = INITIAL_PAGE_LIMIT;
   
-  logger.info('Fetching ArNS transactions...');
+  logger.info('Fetching ArNS names (no background validation)...');
   
-  // Keep fetching ArNS names until we have enough valid transactions
+  // Fetch ArNS names without validation - they'll be validated on-demand
   while (transactions.length < targetCount) {
-    const arnsMetadata = await arnsService.getNextArNSName();
+    const arnsRecord = await arnsService.getNextArNSName();
     
-    if (!arnsMetadata) {
+    if (!arnsRecord) {
       logger.warn('No more ArNS names available');
       break;
     }
     
-    // Double-check that it's not a default ID (should already be filtered by service)
-    if (arnsMetadata.isDefaultId) {
-      logger.debug(`Skipping default ID for ${arnsMetadata.name}`);
-      continue;
-    }
+    // Create a placeholder transaction for the ArNS name
+    // This will be validated and resolved when the user navigates to it
+    const placeholderTx: TxMeta = {
+      id: `arns:${arnsRecord.name}`, // Use a placeholder ID
+      owner: { address: 'arns-placeholder' },
+      fee: { ar: '0' },
+      quantity: { ar: '0' },
+      tags: [
+        { name: 'Content-Type', value: 'text/html' },
+        { name: 'ArNS-Name', value: arnsRecord.name }
+      ],
+      data: { size: 0 },
+      block: { height: 0, timestamp: Date.now() },
+      bundledIn: undefined,
+      arnsName: arnsRecord.name,
+      arnsGateway: undefined, // Will be resolved on-demand
+      needsValidation: true // Flag to indicate this needs validation
+    };
     
-    try {
-      // Fetch the transaction metadata for the resolved ID
-      const response = await fetch(`${GATEWAY_DATA_SOURCE[0]}/graphql`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `
-            query GetTransaction($id: ID!) {
-              transaction(id: $id) {
-                id
-                owner { address }
-                fee { ar }
-                quantity { ar }
-                tags { name value }
-                data { size }
-                block { height timestamp }
-                bundledIn { id }
-              }
-            }
-          `,
-          variables: { id: arnsMetadata.resolvedTxId }
-        })
-      });
-      
-      const result = await response.json();
-      
-      if (result.data?.transaction) {
-        const tx = result.data.transaction;
-        // Add ArNS metadata to the transaction
-        transactions.push({
-          ...tx,
-          arnsName: arnsMetadata.name,
-          arnsGateway: arnsMetadata.gatewayUrl  // Store gateway for content loading
-        });
-        logger.debug(`Added ArNS transaction: ${arnsMetadata.name} -> ${arnsMetadata.resolvedTxId} via ${arnsMetadata.gatewayUrl}`);
-      }
-    } catch (error) {
-      logger.error(`Failed to fetch transaction for ArNS ${arnsMetadata.name}:`, error);
-    }
+    transactions.push(placeholderTx);
+    logger.debug(`Added ArNS placeholder: ${arnsRecord.name}`);
   }
   
-  logger.info(`Fetched ${transactions.length} ArNS transactions`);
+  logger.info(`Fetched ${transactions.length} ArNS names (validation on-demand)`);
   return transactions;
 }
 
 /**
  * Get next transaction or trigger background refill
  */
-export async function getNextTx(channel: Channel): Promise<TxMeta | null> {
+export async function getNextTx(channel: Channel, recursionDepth: number = 0): Promise<TxMeta | null> {
+  // Prevent infinite recursion for ArFS failures
+  if (recursionDepth > 10) {
+    logger.error(`ArFS recursion limit reached (${recursionDepth}), aborting to prevent infinite loop`);
+    return null;
+  }
+  
   // Use mutex to prevent race conditions
   await queueMutex.acquire();
   
@@ -333,14 +317,46 @@ export async function getNextTx(channel: Channel): Promise<TxMeta | null> {
       const entityType = getTagValue(tx.tags, "Entity-Type");
       if (entityType !== "file") {
         logger.debug("Skipping non-ArFS file transaction");
-        queueMutex.release();
-        return getNextTx(channel); // recursively try next
+        // Don't release mutex here - let finally block handle it
+        return getNextTx(channel, recursionDepth + 1); // recursively try next
       }
 
       try {
-        queueMutex.release(); // Release before async operation
-        const response = await fetch(`${GATEWAY_DATA_SOURCE[0]}/${tx.id}`);
-        const metadata = await response.json();
+        // Keep mutex locked during ArFS processing to prevent race conditions
+        
+        logger.debug(`Fetching ArFS metadata for transaction: ${tx.id}`);
+        
+        // Use Wayfinder for ArFS metadata fetching to ensure proper routing and verification
+        const contentResponse = await wayfinderService.getContentUrl({
+          txId: tx.id,
+          contentType: 'application/json',
+          size: tx.data.size
+        });
+        
+        logger.debug(`ArFS content response:`, contentResponse);
+        
+        // For ArFS, we need to fetch the metadata JSON, not use the blob data
+        if (!contentResponse.url) {
+          throw new Error(`No URL returned from Wayfinder for ArFS metadata ${tx.id}`);
+        }
+        
+        logger.debug(`Fetching ArFS metadata from URL: ${contentResponse.url}`);
+        const response = await fetch(contentResponse.url);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const responseText = await response.text();
+        
+        logger.debug(`ArFS content preview: ${responseText.substring(0, 200)}`);
+        
+        // Check if response looks like JSON
+        if (!responseText.trim().startsWith('{') && !responseText.trim().startsWith('[')) {
+          throw new Error(`Expected JSON but got: ${responseText.substring(0, 100)}`);
+        }
+        
+        const metadata = JSON.parse(responseText);
 
         const {
           dataTxId,
@@ -350,6 +366,10 @@ export async function getNextTx(channel: Channel): Promise<TxMeta | null> {
           ...rest
         } = metadata;
 
+        if (!dataTxId || !dataContentType) {
+          throw new Error(`Invalid ArFS metadata: missing dataTxId or dataContentType`);
+        }
+
         tx.arfsMeta = {
           dataTxId,
           name,
@@ -358,15 +378,24 @@ export async function getNextTx(channel: Channel): Promise<TxMeta | null> {
           customTags: rest,
         };
 
+        logger.debug(`Successfully parsed ArFS metadata for ${tx.id}: ${name} (${dataContentType})`);
+
         // Filter out octet-stream content types that can't be rendered
         if (dataContentType === 'application/octet-stream') {
           logger.debug(`Skipping ArFS file with octet-stream content type: ${tx.id}`);
-          return getNextTx(channel); // Skip to next transaction
+          return getNextTx(channel, recursionDepth + 1); // Skip to next transaction
         }
 
       } catch (err) {
-        logger.warn(`Failed to load ArFS metadata for ${tx.id}`, err);
-        return getNextTx(channel); // try next tx
+        logger.error(`Failed to load ArFS metadata for ${tx.id}:`, err);
+        
+        // If we're hitting too many errors, return null to prevent infinite loop
+        if (recursionDepth >= 3) {
+          logger.error(`Too many consecutive ArFS failures (depth: ${recursionDepth}), stopping`);
+          return null;
+        }
+        
+        return getNextTx(channel, recursionDepth + 1); // try next tx
       }
     }
 
@@ -389,27 +418,6 @@ export function clearSeenIds(): void {
   logger.debug("Cleared seen IDs set and ArNS seen names");
 }
 
-/**
- * Peek at next few transactions without consuming them for preloading
- */
-export async function peekNextTransactions(channel: Channel, count: number = 3): Promise<TxMeta[]> {
-  await queueMutex.acquire();
-  
-  try {
-    // If queue is too small, refill first
-    if (queue.length < count) {
-      logger.debug(`Queue has ${queue.length} items, refilling for peek`);
-      queueMutex.release(); // Release before async operation
-      await initFetchQueue(channel);
-      await queueMutex.acquire(); // Re-acquire after
-    }
-    
-    // Return copy of next items without removing them
-    return queue.slice(0, count);
-  } finally {
-    queueMutex.release();
-  }
-}
 
 export async function initFetchQueue(
   channel: Channel,
@@ -563,6 +571,7 @@ export async function initFetchQueue(
   if (min > 0 && max > min) {
     learnFromBlockRange(min, max, 0.8);
   }
+
 
   // —— 7) Return the actual window ——
   return { min, max };

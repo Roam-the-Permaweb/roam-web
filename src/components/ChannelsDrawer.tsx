@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'preact/hooks'
 import { DateRangeSlider } from './DateRangeSlider'
+import { BlockHeightPicker } from './BlockHeightPicker'
 import { Icons } from './Icons'
 import { useSimplifiedWayfinderSettings } from '../hooks/useSimplifiedWayfinderSettings'
+import { useBlockHeightMode } from '../hooks/useBlockHeightMode'
 import type { MediaType, TxMeta } from '../constants'
 import type { RoutingMode } from '../hooks/useSimplifiedWayfinderSettings'
 
@@ -34,6 +36,7 @@ interface ChannelsDrawerProps {
   queueLoading: boolean
   isResolvingBlocks?: boolean
   actualBlocks?: { min: number; max: number } | null // Actual blocks when syncing
+  tempBlocks?: { min: number; max: number } | null // Temp blocks for block mode
   onResetRange: () => void
   onApplyRange: () => void
   onBlockRangeEstimated?: (minBlock: number, maxBlock: number) => void
@@ -55,6 +58,7 @@ export function ChannelsDrawer({
   queueLoading,
   isResolvingBlocks = false,
   actualBlocks,
+  tempBlocks,
   onResetRange,
   onApplyRange,
   onBlockRangeEstimated
@@ -64,6 +68,9 @@ export function ChannelsDrawer({
     settings: wayfinderSettings, 
     updateSettings: updateWayfinderSettings
   } = useSimplifiedWayfinderSettings()
+  
+  // Block height mode toggle
+  const { isBlockMode, toggleMode } = useBlockHeightMode()
   
   // Advanced settings state
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -90,7 +97,7 @@ export function ChannelsDrawer({
       const isValid = parsed.protocol === 'https:' || parsed.protocol === 'http:'
       setCuUrlError(isValid ? '' : 'URL must start with http:// or https://')
       return isValid
-    } catch {
+    } catch (_error) {
       setCuUrlError('Invalid URL format')
       return false
     }
@@ -117,6 +124,10 @@ export function ChannelsDrawer({
     'fair-share': {
       label: 'Fair Share',
       description: 'Cycle through gateways evenly'
+    },
+    'self': {
+      label: 'Self',
+      description: 'Use the gateway you\'re currently accessing'
     }
   }
 
@@ -170,21 +181,68 @@ export function ChannelsDrawer({
           </div>
         </div>
         
-        <DateRangeSlider
-          tempRange={tempRange}
-          setTempRange={setTempRange}
-          onBlockRangeEstimated={onBlockRangeEstimated}
-          isLoading={isResolvingBlocks}
-          actualBlocks={actualBlocks || undefined}
-          rangeError={rangeError}
-          queueLoading={queueLoading}
-          onResetRange={onResetRange}
-          onApplyRange={onApplyRange}
-        />
+        {/* Date/Block Range Filter Section */}
+        <div className="section filter-range-section">
+          <div className="section-header centered">
+            <h2 className="section-title">Filter Range</h2>
+            <div className="filter-mode-selector">
+              <button 
+                className={`filter-mode-btn ${!isBlockMode ? 'active' : ''}`}
+                onClick={() => isBlockMode && toggleMode()}
+                type="button"
+              >
+                <Icons.Calendar size={16} />
+                <span className="mode-label">Dates</span>
+              </button>
+              <button 
+                className={`filter-mode-btn ${isBlockMode ? 'active' : ''}`}
+                onClick={() => !isBlockMode && toggleMode()}
+                type="button"
+              >
+                <Icons.Hash size={16} />
+                <span className="mode-label">Blocks</span>
+              </button>
+            </div>
+          </div>
+          
+          {isBlockMode ? (
+            <BlockHeightPicker
+              tempRange={{ 
+                from: tempBlocks?.min || actualBlocks?.min || 0, 
+                to: tempBlocks?.max || actualBlocks?.max || 1666042 
+              }}
+              setTempRange={(range) => {
+                // Store the block range for later use
+                onBlockRangeEstimated?.(range.from, range.to)
+              }}
+              onBlockRangeEstimated={(range) => {
+                onBlockRangeEstimated?.(range.from, range.to)
+              }}
+              isLoading={isResolvingBlocks}
+              actualBlocks={actualBlocks ? { from: actualBlocks.min, to: actualBlocks.max } : undefined}
+              rangeError={rangeError}
+              queueLoading={queueLoading}
+              onResetRange={onResetRange}
+              onApplyRange={onApplyRange}
+            />
+          ) : (
+            <DateRangeSlider
+              tempRange={tempRange}
+              setTempRange={setTempRange}
+              onBlockRangeEstimated={onBlockRangeEstimated}
+              isLoading={isResolvingBlocks}
+              actualBlocks={actualBlocks || undefined}
+              rangeError={rangeError}
+              queueLoading={queueLoading}
+              onResetRange={onResetRange}
+              onApplyRange={onApplyRange}
+            />
+          )}
+        </div>
 
         {/* AR.IO Wayfinder Settings Section */}
         <div className="section">
-          <div className="section-header">
+          <div className="section-header centered">
             <h2 className="section-title">AR.IO Wayfinder</h2>
           </div>
           

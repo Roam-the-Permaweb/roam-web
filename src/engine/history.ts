@@ -100,3 +100,11 @@ export async function peekForward(): Promise<TxMeta | undefined> {
   }
   return undefined;
 }
+
+/**
+ * Check if there's history to go back to
+ */
+export async function canGoBack(): Promise<boolean> {
+  const state = await loadHistory();
+  return state.index > 0;
+}

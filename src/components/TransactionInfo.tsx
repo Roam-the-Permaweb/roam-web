@@ -2,14 +2,17 @@ import type { TxMeta } from '../constants'
 import type { VerificationStatus } from '../services/wayfinderTypes'
 import { Icons, getMediaTypeIcon } from './Icons'
 import { VerificationIndicator } from './VerificationIndicator'
+import { getDisplayArnsName } from '../utils/punycode'
+import { GATEWAY_DATA_SOURCE } from '../engine/fetchQueue'
 
 interface TransactionInfoProps {
   txMeta: TxMeta
   formattedTime: string
   verificationStatus?: VerificationStatus
+  currentGateway?: string | null
 }
 
-export function TransactionInfo({ txMeta, formattedTime, verificationStatus }: TransactionInfoProps) {
+export function TransactionInfo({ txMeta, formattedTime, verificationStatus, currentGateway }: TransactionInfoProps) {
   const fileName = txMeta.arfsMeta?.name
   const contentType = txMeta.arfsMeta?.contentType || 
     txMeta.tags.find(t => t.name === 'Content-Type')?.value || 'Unknown'
@@ -31,21 +34,68 @@ export function TransactionInfo({ txMeta, formattedTime, verificationStatus }: T
         )}
         
         {txMeta.arnsName && (
-          <div className="metadata-link arns-name">
+          <a 
+            className="metadata-link arns-name"
+            href={(() => {
+              // Get the ArNS app URL by replacing 'roam' with 'arns' in current URL
+              const arnsAppUrl = (() => {
+                // Get current page hostname
+                const currentHostname = window.location.hostname;
+                
+                // If we're running on a roam.* domain, just replace roam with arns
+                if (currentHostname.startsWith('roam.')) {
+                  const arnsHostname = currentHostname.replace(/^roam\./, 'arns.');
+                  return `https://${arnsHostname}/#/manage/names/${txMeta.arnsName}`;
+                }
+                
+                // Fallback: try to use the gateway from the current content
+                if (txMeta.arnsGateway) {
+                  try {
+                    const url = new URL(txMeta.arnsGateway);
+                    const parts = url.hostname.split('.');
+                    // Remove the first part (ArNS name) and prepend 'arns'
+                    const gatewayDomain = parts.slice(1).join('.');
+                    return `https://arns.${gatewayDomain}/#/manage/names/${txMeta.arnsName}`;
+                  } catch (_error) {
+                    // Invalid URL, continue to next fallback
+                  }
+                }
+                
+                // Last fallback: use current gateway if available
+                if (currentGateway) {
+                  try {
+                    const url = new URL(currentGateway);
+                    return `https://arns.${url.hostname}/#/manage/names/${txMeta.arnsName}`;
+                  } catch (_error) {
+                    // Invalid URL
+                  }
+                }
+                
+                // Final fallback: use first configured gateway
+                const fallbackGateway = new URL(GATEWAY_DATA_SOURCE[0]).hostname;
+                return `https://arns.${fallbackGateway}/#/manage/names/${txMeta.arnsName}`;
+              })();
+              
+              return arnsAppUrl;
+            })()}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={`View ArNS details for ${getDisplayArnsName(txMeta.arnsName)}`}
+          >
             <Icons.Globe size={14} />
-            <span>{txMeta.arnsName}</span>
-          </div>
+            <span>{getDisplayArnsName(txMeta.arnsName)}</span>
+          </a>
         )}
         
         <a
           className="metadata-link"
-          href={`https://viewblock.io/arweave/tx/${txMeta.id}`}
+          href={`https://viewblock.io/arweave/tx/${txMeta.arfsMeta?.dataTxId || txMeta.id}`}
           target="_blank"
           rel="noopener noreferrer"
-          title={`Transaction: ${txMeta.id}`}
+          title={`Transaction: ${txMeta.arfsMeta?.dataTxId || txMeta.id}`}
         >
           <Icons.Link size={14} />
-          <span>{txMeta.id.slice(0,8)}…</span>
+          <span>{(txMeta.arfsMeta?.dataTxId || txMeta.id).slice(0,8)}…</span>
         </a>
         
         {isPinned ? (

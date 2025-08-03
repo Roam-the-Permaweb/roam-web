@@ -55,6 +55,7 @@ export interface TxMeta {
   };
   arnsName?: string; // The ArNS name that resolved to this content
   arnsGateway?: string; // The gateway that resolved the ArNS name
+  needsValidation?: boolean; // Flag to indicate ArNS name needs on-demand validation
 }
 
 // --------------------------------------------------------------------------

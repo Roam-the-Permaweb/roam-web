@@ -18,7 +18,6 @@ export interface ArNSMetadata {
   gatewayUrl: string;      // Gateway that resolved this name
   ttl?: number;
   validatedAt: number;
-  isDefaultId?: boolean;   // Flag for default IDs
 }
 
 export interface ArNSPaginatedResponse {
@@ -30,7 +29,7 @@ export interface ArNSPaginatedResponse {
   sortOrder: 'asc' | 'desc';
 }
 
-export type ArNSSortBy = 'name' | 'processId' | 'endTimestamp' | 'startTimestamp' | 'type' | 'undernames';
+export type ArNSSortBy = 'name' | 'processId' | 'endTimestamp' | 'startTimestamp' | 'type' | 'undernameLimit' | 'purchasePrice';
 
 export interface ArNSFetchStrategy {
   sortBy: ArNSSortBy;

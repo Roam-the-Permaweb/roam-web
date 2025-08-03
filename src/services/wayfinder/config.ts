@@ -149,9 +149,11 @@ export const ROUTING_MODE_CONFIGS = {
       strategy: "fastest-ping" as const,
       staticGateway: "https://arweave.net",
       preferredGateway: "https://arweave.net",
-      timeoutMs: 500,
+      timeoutMs: 1000, // 1000ms timeout as requested
       probePath: "/ar-io/info",
     },
+    // Note: FastestPingRoutingStrategy is wrapped with SimpleCacheRoutingStrategy
+    // in createRoutingStrategy() to cache the fastest gateway for 15 minutes
   },
   "fair-share": {
     gatewayProvider: {
@@ -170,6 +172,21 @@ export const ROUTING_MODE_CONFIGS = {
       strategy: "round-robin" as const,
       staticGateway: "https://arweave.net",
       preferredGateway: "https://arweave.net",
+      timeoutMs: 500,
+      probePath: "/ar-io/info",
+    },
+  },
+  self: {
+    gatewayProvider: {
+      type: "static" as const,
+      config: {
+        gateways: [determineFallbackGateway()], // Use current gateway
+      },
+    },
+    strategy: {
+      strategy: "static" as const,
+      staticGateway: determineFallbackGateway(),
+      preferredGateway: determineFallbackGateway(),
       timeoutMs: 500,
       probePath: "/ar-io/info",
     },
@@ -260,8 +277,16 @@ export function validateConfig(config: WayfinderConfig): WayfinderConfig {
  */
 export function getCurrentRoutingMode(
   config: WayfinderConfig
-): "balanced" | "fast" | "fair-share" | "custom" {
+): "balanced" | "fast" | "fair-share" | "self" | "custom" {
   const { strategy, gatewayProvider } = config.routing;
+
+  // Check for self mode (static strategy with static gateway provider)
+  if (
+    strategy.strategy === "static" &&
+    gatewayProvider.type === "static"
+  ) {
+    return "self";
+  }
 
   if (
     strategy.strategy === "random" &&
@@ -274,7 +299,7 @@ export function getCurrentRoutingMode(
   if (
     strategy.strategy === "fastest-ping" &&
     gatewayProvider.type === "simple-cache" &&
-    (gatewayProvider.config as any).wrappedProviderConfig?.limit === 5
+    (gatewayProvider.config as any).wrappedProviderConfig?.limit === 10
   ) {
     return "fast";
   }
@@ -282,7 +307,7 @@ export function getCurrentRoutingMode(
   if (
     strategy.strategy === "round-robin" &&
     gatewayProvider.type === "simple-cache" &&
-    (gatewayProvider.config as any).wrappedProviderConfig?.limit === 50
+    (gatewayProvider.config as any).wrappedProviderConfig?.limit === 30
   ) {
     return "fair-share";
   }

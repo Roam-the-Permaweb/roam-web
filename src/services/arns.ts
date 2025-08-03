@@ -6,6 +6,12 @@ import type {
   ArNSMetadata,
   ArNSFetchStrategy
 } from "./arnsTypes";
+import { 
+  ArNSResolutionError, 
+  ArNSTimeoutError, 
+  ArNSNetworkError,
+  ArNSInvalidResponseError 
+} from "./arns/errors";
 
 /**
  * ArNS Service - Manages ArNS name discovery and resolution
@@ -25,12 +31,6 @@ class ArNSService {
   private currentCursor: string | undefined;
   private hasMorePages = true;
   
-  // Default ArNS resolver IDs that should be filtered out
-  private readonly DEFAULT_IDS = new Set([
-    'oork_YifB3-JQQZg8EgMPQJytua_QCHKmMqt5kmnCo', // ArNS resolver
-    // Add other default IDs as needed
-  ]);
-  
   // Fetch strategies for variety
   private strategies: ArNSFetchStrategy[] = [
     { sortBy: 'startTimestamp', sortOrder: 'desc' }, // Newest names
@@ -40,52 +40,44 @@ class ArNSService {
   ];
   
   private readonly FETCH_COOLDOWN = 30000; // 30s between fetches
-  private readonly PAGE_SIZE = 50; // Smaller pages for mobile
+  private readonly PAGE_SIZE = 100; // Smaller pages for mobile
   private readonly VALIDATION_TIMEOUT = 5000; // 5s timeout for validation
   
   /**
-   * Check if a transaction ID is a default ID
+   * Get next ArNS name (unvalidated)
+   * Validation will happen lazily when actually needed
    */
-  isDefaultId(txId: string): boolean {
-    return this.DEFAULT_IDS.has(txId);
-  }
-  
-  /**
-   * Get next validated ArNS name
-   */
-  async getNextArNSName(): Promise<ArNSMetadata | null> {
-    // Try to get from validated cache first
-    const cached = this.getFromValidatedCache();
-    if (cached) return cached;
-    
-    // Fetch and validate new names
+  async getNextArNSName(): Promise<ArNSRecord | null> {
+    // Ensure we have names available
     await this.ensureArNSNames();
     
-    // Try again from cache
-    return this.getFromValidatedCache();
+    // Get an unvalidated name that hasn't been seen
+    const unvalidatedNames = this.getUnvalidatedNames()
+      .filter(name => !this.seenNames.has(name));
+    
+    if (unvalidatedNames.length === 0) {
+      logger.debug('No unvalidated ArNS names available');
+      return null;
+    }
+    
+    // Pick a random unvalidated name
+    const randomIndex = Math.floor(Math.random() * unvalidatedNames.length);
+    const selectedName = unvalidatedNames[randomIndex];
+    
+    // Mark as seen to avoid re-selecting
+    this.seenNames.add(selectedName);
+    
+    // Find the full record
+    for (const records of this.cache.values()) {
+      const record = records.find(r => r.name === selectedName);
+      if (record) {
+        return record;
+      }
+    }
+    
+    return null;
   }
   
-  /**
-   * Get a validated name from cache
-   */
-  private getFromValidatedCache(): ArNSMetadata | null {
-    const validNames = Array.from(this.validatedNames.values())
-      .filter(meta => 
-        !this.seenNames.has(meta.name) && 
-        !meta.isDefaultId  // Filter out default IDs
-      );
-    
-    if (validNames.length === 0) return null;
-    
-    // Pick a random validated name
-    const randomIndex = Math.floor(Math.random() * validNames.length);
-    const selected = validNames[randomIndex];
-    
-    // Mark as seen
-    this.seenNames.add(selected.name);
-    
-    return selected;
-  }
   
   /**
    * Ensure we have ArNS names available
@@ -99,7 +91,7 @@ class ArNSService {
     
     try {
       await this.fetchArNSPage();
-      await this.validateBatch();
+      // Removed validateBatch() - validation now happens lazily
     } catch (error) {
       logger.error('Failed to fetch ArNS names:', error);
     }
@@ -117,21 +109,21 @@ class ArNSService {
     try {
       const response = await io.getArNSRecords({
         limit: this.PAGE_SIZE,
-        sortBy: strategy.sortBy as any, // SDK types might not match exactly
-        sortOrder: strategy.sortOrder as any,
+        sortBy: strategy.sortBy,
+        sortOrder: strategy.sortOrder,
         cursor: this.currentCursor
       });
       
       logger.info(`Fetched ${response.items.length} ArNS names`);
       
       // Convert AR.IO SDK response to our ArNSRecord format
-      const records: ArNSRecord[] = response.items.map((item: any) => ({
+      const records: ArNSRecord[] = response.items.map((item) => ({
         name: item.name,
         processId: item.processId || '',
         type: item.type || 'lease',
         startTimestamp: item.startTimestamp || 0,
-        endTimestamp: item.endTimestamp,
-        undernames: item.undernames || 0,
+        endTimestamp: item.type === 'lease' ? item.endTimestamp : undefined,
+        undernames: item.undernameLimit || 0,
         purchasePrice: item.purchasePrice
       }));
       
@@ -156,22 +148,6 @@ class ArNSService {
     }
   }
   
-  /**
-   * Validate a batch of ArNS names
-   */
-  private async validateBatch(): Promise<void> {
-    const unvalidatedNames = this.getUnvalidatedNames();
-    if (unvalidatedNames.length === 0) return;
-    
-    logger.info(`Validating ${unvalidatedNames.length} ArNS names...`);
-    
-    // Validate in parallel but limit concurrency
-    const batchSize = 5;
-    for (let i = 0; i < unvalidatedNames.length; i += batchSize) {
-      const batch = unvalidatedNames.slice(i, i + batchSize);
-      await Promise.all(batch.map(name => this.validateArNSName(name)));
-    }
-  }
   
   /**
    * Get unvalidated names from cache
@@ -192,9 +168,9 @@ class ArNSService {
   }
   
   /**
-   * Validate a single ArNS name
+   * Validate a single ArNS name (now public for lazy validation)
    */
-  private async validateArNSName(name: string): Promise<string | null> {
+  async validateArNSName(name: string): Promise<string | null> {
     try {
       // Use Wayfinder to resolve the ArNS name to a gateway URL
       // This will handle the routing logic and return a resolved URL
@@ -213,17 +189,21 @@ class ArNSService {
       const gatewayUrl = new URL(resolvedUrl.toString()).origin;
       return this.validateWithUrl(name, resolvedUrl.toString(), gatewayUrl);
     } catch (error) {
-      logger.debug(`ArNS validation failed for ${name}:`, error);
+      logger.debug(`[ArNS Resolution] Failed to resolve ${name}:`, error);
+      
+      // Re-throw with ArNS-specific error for better handling
+      if (error instanceof Error) {
+        throw new ArNSNetworkError(name, error);
+      }
+      throw error;
     }
-    
-    return null;
   }
   
   /**
    * Validate ArNS name with a specific URL
    */
   private async validateWithUrl(name: string, url: string, gatewayUrl: string): Promise<string | null> {
-    logger.debug(`Validating ArNS name ${name} using URL: ${url}`);
+    logger.debug(`[ArNS Resolution] Making HEAD request to resolve transaction ID for: ${name}`);
     
     // Make HEAD request with timeout
     const controller = new AbortController();
@@ -244,35 +224,50 @@ class ArNSService {
       const resolvedId = response.headers.get('x-arns-resolved-id');
       
       if (resolvedId && response.ok) {
-        logger.debug(`Validated ArNS name: ${name} -> ${resolvedId}`);
+        logger.debug(`[ArNS Resolution] Resolved transaction ID: ${name} -> ${resolvedId}`);
         
-        // Check if it's a default ID
-        const isDefault = this.isDefaultId(resolvedId);
-        if (isDefault) {
-          logger.debug(`Skipping default ID: ${resolvedId} for ArNS name: ${name}`);
-        }
-        
-        // Cache validation result (including default IDs for tracking)
+        // Cache validation result
         this.validatedNames.set(name, {
           name,
           resolvedTxId: resolvedId,
           gatewayUrl,
-          validatedAt: Date.now(),
-          isDefaultId: isDefault
+          validatedAt: Date.now()
         });
         
         return resolvedId;
       } else if (!response.ok) {
-        logger.warn(`ArNS validation failed for ${name}: HTTP ${response.status}`);
+        logger.warn(`[ArNS Resolution] Failed to resolve ${name}: HTTP ${response.status}`);
+        throw new ArNSResolutionError(
+          name, 
+          `HTTP ${response.status} ${response.statusText}`,
+          response.status
+        );
       } else {
-        logger.warn(`ArNS name ${name} did not return x-arns-resolved-id header`);
+        logger.warn(`[ArNS Resolution] ${name} did not return x-arns-resolved-id header`);
+        throw new ArNSInvalidResponseError(
+          name,
+          'Missing x-arns-resolved-id header in response'
+        );
       }
     } catch (error) {
       clearTimeout(timeout);
+      
+      // Re-throw ArNS errors as-is
+      if (error instanceof ArNSResolutionError || 
+          error instanceof ArNSInvalidResponseError) {
+        throw error;
+      }
+      
+      // Wrap other errors
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          throw new ArNSTimeoutError(name, this.VALIDATION_TIMEOUT);
+        }
+        throw new ArNSNetworkError(name, error);
+      }
+      
       throw error;
     }
-    
-    return null;
   }
   
   /**
@@ -298,6 +293,13 @@ class ArNSService {
   clearSeenNames(): void {
     this.seenNames.clear();
     logger.debug('Cleared seen ArNS names');
+  }
+  
+  /**
+   * Get validated metadata for a name
+   */
+  getValidatedMetadata(name: string): ArNSMetadata | null {
+    return this.validatedNames.get(name) || null;
   }
   
   /**
