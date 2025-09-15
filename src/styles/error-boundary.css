@@ -1,0 +1,138 @@
+/* Error Boundary Styles */
+
+.error-boundary-fallback {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.9);
+  z-index: 9999;
+}
+
+.error-container {
+  background: rgba(30, 30, 30, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 40px;
+  max-width: 500px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.error-container h2 {
+  color: #FF6A00;
+  font-size: 24px;
+  margin: 0 0 20px;
+  font-weight: 600;
+}
+
+.error-container p {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 16px;
+  margin: 0 0 20px;
+  line-height: 1.5;
+}
+
+.error-details {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  padding: 15px;
+  margin: 20px 0;
+  text-align: left;
+}
+
+.error-details summary {
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  font-size: 14px;
+  outline: none;
+}
+
+.error-details pre {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  margin: 10px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'SF Mono', Monaco, monospace;
+}
+
+.error-reset-button {
+  background: linear-gradient(135deg, #FF6A00 0%, #FF00CC 100%);
+  color: white;
+  border: none;
+  border-radius: 50px;
+  padding: 12px 30px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.error-reset-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 20px rgba(255, 106, 0, 0.3);
+}
+
+.error-reset-button:active {
+  transform: translateY(0);
+}
+
+/* Media View Error Styles */
+
+.media-error-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 200px;
+}
+
+.media-error-content {
+  text-align: center;
+  padding: 20px;
+}
+
+.media-error-content p {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 16px;
+  margin: 0 0 15px;
+}
+
+.media-error-retry {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+  padding: 8px 20px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.media-error-retry:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Mobile Responsive */
+@media (max-width: 640px) {
+  .error-container {
+    padding: 30px 20px;
+    border-radius: 15px;
+  }
+
+  .error-container h2 {
+    font-size: 20px;
+  }
+
+  .error-container p {
+    font-size: 14px;
+  }
+}

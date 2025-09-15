@@ -3,6 +3,7 @@ import type { JSX } from 'preact/jsx-runtime'
 import '../styles/details-drawer.css'
 import { useState } from 'preact/hooks'
 import type { TxMeta } from '../constants'
+import type { VerificationStatus } from '../services/wayfinderTypes'
 import { GATEWAY_DATA_SOURCE } from '../engine/fetchQueue'
 import { Icons } from './Icons'
 
@@ -10,6 +11,8 @@ export interface DetailsDrawerProps {
   txMeta: TxMeta | null
   open: boolean
   onClose: () => void
+  currentGateway?: string | null
+  verificationStatus?: VerificationStatus
 }
 
 function shortenId(id: string, head = 6, tail = 6): string {
@@ -24,7 +27,7 @@ function formatFileSize(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-export const DetailsDrawer = ({ txMeta, open, onClose }: DetailsDrawerProps): JSX.Element | null => {
+export const DetailsDrawer = ({ txMeta, open, onClose, currentGateway, verificationStatus }: DetailsDrawerProps): JSX.Element | null => {
   if (!open || !txMeta) return null
 
   const { id, owner, fee, quantity, tags, block, arfsMeta } = txMeta
@@ -86,6 +89,74 @@ export const DetailsDrawer = ({ txMeta, open, onClose }: DetailsDrawerProps): JS
             )}
           </div>
 
+          {/* Delivery Information Section */}
+          {(currentGateway || verificationStatus) && (
+            <div className="info-section">
+              <h3 className="section-title">Delivery Information</h3>
+              {currentGateway && (
+                <div className="info-item">
+                  <span className="info-label">Gateway</span>
+                  <span className="info-value">
+                    {(() => {
+                      try {
+                        const url = new URL(currentGateway);
+                        // Extract the main domain from hostname (remove sandbox subdomain)
+                        const hostname = url.hostname;
+                        const parts = hostname.split('.');
+                        
+                        // If it looks like a sandbox subdomain (long hash), remove it
+                        const mainDomain = parts[0].length > 20 ? 
+                          parts.slice(1).join('.') : 
+                          hostname;
+                        
+                        // Construct the gateway base URL
+                        const gatewayBaseUrl = `https://${mainDomain}`;
+                        
+                        return (
+                          <a 
+                            href={gatewayBaseUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="gateway-link"
+                          >
+                            {mainDomain}
+                          </a>
+                        );
+                      } catch {
+                        return currentGateway;
+                      }
+                    })()}
+                  </span>
+                </div>
+              )}
+              {verificationStatus && verificationStatus.status !== 'pending' && (
+                <>
+                  <div className="info-item">
+                    <span className="info-label">Verification</span>
+                    <span className="info-value">
+                      {verificationStatus.status === 'verified' && '✓ Verified'}
+                      {verificationStatus.status === 'verifying' && '⟳ Verifying...'}
+                      {verificationStatus.status === 'failed' && '✗ Failed'}
+                      {verificationStatus.status === 'not-verified' && 'Not Verified'}
+                    </span>
+                  </div>
+                  {verificationStatus.gateway && verificationStatus.status === 'verified' && (
+                    <div className="info-item">
+                      <span className="info-label">Verified By</span>
+                      <span className="info-value">{verificationStatus.gateway}</span>
+                    </div>
+                  )}
+                  {verificationStatus.error && (
+                    <div className="info-item">
+                      <span className="info-label">Error</span>
+                      <span className="info-value error-text">{verificationStatus.error}</span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
           {/* ArDrive Links Section */}
           {(driveIdTag || fileIdTag) && (
             <div className="info-section">
@@ -131,8 +202,8 @@ export const DetailsDrawer = ({ txMeta, open, onClose }: DetailsDrawerProps): JS
             <div className="info-item">
               <span className="info-label">Tx ID</span>
               <span className="info-value">
-                <a href={`https://viewblock.io/arweave/tx/${id}`} target="_blank" rel="noopener noreferrer" title={id}>
-                  {shortenId(id)}
+                <a href={`https://viewblock.io/arweave/tx/${arfsMeta?.dataTxId || id}`} target="_blank" rel="noopener noreferrer" title={arfsMeta?.dataTxId || id}>
+                  {shortenId(arfsMeta?.dataTxId || id)}
                 </a>
               </span>
             </div>
@@ -144,6 +215,16 @@ export const DetailsDrawer = ({ txMeta, open, onClose }: DetailsDrawerProps): JS
                 </a>
               </span>
             </div>
+            {arfsMeta?.customTags?.pinnedDataOwner && (
+              <div className="info-item">
+                <span className="info-label">📌 Pinned From</span>
+                <span className="info-value">
+                  <a href={`https://viewblock.io/arweave/address/${arfsMeta.customTags.pinnedDataOwner}`} target="_blank" rel="noopener noreferrer" title={arfsMeta.customTags.pinnedDataOwner}>
+                    {shortenId(arfsMeta.customTags.pinnedDataOwner)}
+                  </a>
+                </span>
+              </div>
+            )}
             <div className="info-item">
               <span className="info-label">Block</span>
               <span className="info-value">{block.height.toLocaleString()}</span>
@@ -173,6 +254,15 @@ export const DetailsDrawer = ({ txMeta, open, onClose }: DetailsDrawerProps): JS
               {visibleTags.map(tag => {
                 const isDriveOrFile = tag.name === 'Drive-Id' || tag.name === 'File-Id'
                 if (isDriveOrFile) return null // Already shown above
+                
+                // For ArFS files, show the data content type instead of metadata content type
+                if (tag.name === 'Content-Type' && arfsMeta?.contentType) {
+                  return (
+                    <span className="tag-item" key={`${tag.name}-${arfsMeta.contentType}`}>
+                      <span className="tag-name">{tag.name}:</span> {arfsMeta.contentType}
+                    </span>
+                  )
+                }
 
                 return (
                   <span className="tag-item" key={`${tag.name}-${tag.value}`}>

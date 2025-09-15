@@ -372,10 +372,23 @@
   color: rgba(255, 255, 255, 0.7);
   text-decoration: none;
   transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .footer-link:hover {
   color: #FF6A00;
+}
+
+.footer-link-text {
+  font-size: 1rem;
+  font-weight: 600;
+  gap: 0;
+}
+
+.footer-link-icon {
+  gap: 0;
 }
 
 .footer-separator {
@@ -556,6 +569,21 @@
 
 .metadata-link.filename:hover {
   color: rgba(255, 255, 255, 0.9);
+}
+
+.metadata-link.arns-name {
+  color: #FF6A00;
+  font-weight: 600;
+  background: rgba(255, 106, 0, 0.1);
+  padding: 0.125rem 0.5rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 106, 0, 0.2);
+}
+
+.metadata-link.arns-name:hover {
+  background: rgba(255, 106, 0, 0.15);
+  border-color: rgba(255, 106, 0, 0.3);
+  color: #FF6A00;
 }
 
 .metadata-verification {

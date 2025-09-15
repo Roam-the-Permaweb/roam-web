@@ -28,7 +28,10 @@ import { useState, useEffect, useRef } from 'preact/hooks';
 import '../styles/media-view.css';
 import '../styles/verification-indicator.css';
 import { GATEWAY_DATA_SOURCE } from '../engine/fetchQueue';
+import { logger } from '../utils/logger';
+import { objectUrlManager } from '../utils/objectUrlManager';
 import { useWayfinderContent } from '../hooks/useWayfinderContent';
+import { arnsService } from '../services/arns';
 import type { TxMeta } from '../constants';
 import { 
   IMAGE_LOAD_THRESHOLD, 
@@ -51,6 +54,7 @@ export interface MediaViewProps {
   onShare?: () => void;
   onDownload?: () => void;
   onOpenInNewTab?: () => void;
+  onGatewayChange?: (gateway: string | null) => void;
 }
 
 export const MediaView = ({
@@ -62,7 +66,8 @@ export const MediaView = ({
   onCorrupt,
   onShare,
   onDownload,
-  onOpenInNewTab
+  onOpenInNewTab,
+  onGatewayChange
 }: MediaViewProps) => {
   const { id, tags } = txMeta;
 
@@ -80,14 +85,64 @@ export const MediaView = ({
 
   // State for forcing content to load even if it exceeds size thresholds
   const [forceLoad, setForceLoad] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const [mediaLoadError, setMediaLoadError] = useState(false);
+  const [isRetrying, setIsRetrying] = useState(false);
   
   // Use Wayfinder for content URL with size-aware loading
-  const wayfinderResult = useWayfinderContent(dataTxId, undefined, forceLoad, baseContentType, size);
+  // ArNS names are now pre-resolved, so we always have a real transaction ID
+  const wayfinderContentId = txMeta.arfsMeta?.dataTxId || txMeta.id;
   
-  // Final content type: prefer Wayfinder's detected type, fallback to base
+  const wayfinderResult = useWayfinderContent(
+    wayfinderContentId, 
+    undefined, 
+    forceLoad, 
+    baseContentType, 
+    size,
+    txMeta.arnsGateway,
+    retryCount
+  );
+  
+  // Use Wayfinder's content type or base content type
   const contentType = wayfinderResult.contentType || baseContentType;
+
+  // For manifests and HTML, prefer direct URL to maintain domain context
+  // For other content types, prefer verified Blob from Wayfinder for security
+  const getContentUrl = () => {
+    const isManifestOrHtml = contentType.startsWith('application/x.arweave-manifest') || 
+                            contentType.startsWith('text/html') ||
+                            contentType === 'application/xhtml+xml';
+    
+    // Use direct URL for manifests and HTML to preserve domain context for relative paths
+    if (isManifestOrHtml && txMeta.arnsName) {
+      return directUrl;
+    }
+    
+    return objectUrl || directUrl;
+  };
   
-  const directUrl = wayfinderResult.url || `${GATEWAY_DATA_SOURCE[0]}/${dataTxId}`;
+  const directUrl = (() => {
+    const currentTxMeta = txMeta;
+    
+    // For ArNS content that is HTML/manifest, use subdomain URL format for proper manifest resolution
+    if (currentTxMeta.arnsName && currentTxMeta.arnsGateway && 
+        (contentType.startsWith('application/x.arweave-manifest') || 
+         contentType.startsWith('text/html') ||
+         contentType === 'application/xhtml+xml')) {
+      const gatewayUrl = new URL(currentTxMeta.arnsGateway);
+      // Check if the gateway URL already includes the ArNS subdomain
+      if (gatewayUrl.hostname.startsWith(`${currentTxMeta.arnsName}.`)) {
+        // Gateway URL already has the ArNS subdomain, use as-is
+        return currentTxMeta.arnsGateway;
+      } else {
+        // Need to add the ArNS subdomain
+        return `https://${currentTxMeta.arnsName}.${gatewayUrl.hostname}`;
+      }
+    }
+    
+    // For regular content and non-HTML ArNS content, use the standard URL format
+    return wayfinderResult.url || `${GATEWAY_DATA_SOURCE[0]}/${dataTxId}`;
+  })();
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -113,9 +168,10 @@ export const MediaView = ({
     }
   };
 
-  const [manualLoad, setManualLoad] = useState(contentType.startsWith('image/') && size > IMAGE_LOAD_THRESHOLD);
-  const [manualLoadVideo, setManualLoadVideo] = useState(contentType.startsWith('video/') && size > VIDEO_LOAD_THRESHOLD);
-  const [manualLoadAudio, setManualLoadAudio] = useState(contentType.startsWith('audio/') && size > AUDIO_LOAD_THRESHOLD);
+  // Initialize with false, will be properly set in useEffect after content type is determined
+  const [manualLoad, setManualLoad] = useState(false);
+  const [manualLoadVideo, setManualLoadVideo] = useState(false);
+  const [manualLoadAudio, setManualLoadAudio] = useState(false);
   const [manualLoadText, setManualLoadText] = useState(false);
   const [textContent, setTextContent] = useState<string | null>(null);
   const [loadingText, setLoadingText] = useState(false);
@@ -123,70 +179,181 @@ export const MediaView = ({
   const [fadeIn, setFadeIn] = useState(false);
   const [actionsExpanded, setActionsExpanded] = useState(false);
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
+  const objectUrlKeyRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
+  const textExtractionRef = useRef<{ txId: string; promise: Promise<string> | null }>({ txId: '', promise: null });
+  const [mediaLoaded, setMediaLoaded] = useState(false);
 
-  // Reset flags when tx changes
-useEffect(() => {
-  const isImage = contentType.startsWith('image/');
-  const isVideo = contentType.startsWith('video/');
-  const isAudio = contentType.startsWith('audio/');
-  const isText = ['text/plain', 'text/markdown'].includes(contentType);
+  // Reset state when transaction changes
+  useEffect(() => {
+    setForceLoad(false);
+    setTextContent(null);
+    setLoadingText(false);
+    setErrorText(null);
+    setFadeIn(false);
+    setMediaLoaded(false);
+    
+    // Release previous object URL when transaction changes
+    if (objectUrlKeyRef.current) {
+      objectUrlManager.release(objectUrlKeyRef.current);
+      objectUrlKeyRef.current = null;
+    }
+    
+    // Reset text extraction cache when transaction changes
+    textExtractionRef.current = { txId: '', promise: null };
+    
+    // Trigger fade in after a short delay for smooth transition
+    const timer = setTimeout(() => {
+      setFadeIn(true);
+    }, FADE_IN_DELAY);
+    
+    return () => clearTimeout(timer);
+  }, [id]); // Only reset when transaction changes, not when content type is detected
 
-  setManualLoad(isImage && size > IMAGE_LOAD_THRESHOLD);
-  setManualLoadVideo(isVideo && size > VIDEO_LOAD_THRESHOLD);
-  setManualLoadAudio(isAudio && size > AUDIO_LOAD_THRESHOLD);
-  setManualLoadText(isText && size > TEXT_LOAD_THRESHOLD);
-  setForceLoad(false);
+  // Update manual load flags when content type or size changes
+  useEffect(() => {
+    const isImage = contentType.startsWith('image/');
+    const isVideo = contentType.startsWith('video/');
+    const isAudio = contentType.startsWith('audio/');
+    const isText = ['text/plain', 'text/markdown'].includes(contentType);
 
-  setTextContent(null);
-  setLoadingText(false);
-  setErrorText(null);
-  setFadeIn(false);
-  
-  // Trigger fade in after a short delay for smooth transition
-  const timer = setTimeout(() => {
-    setFadeIn(true);
-  }, FADE_IN_DELAY);
-  
-  return () => clearTimeout(timer);
-}, [id, contentType, size]);
+    // Set manual load flags based on size thresholds
+    setManualLoad(isImage && size > IMAGE_LOAD_THRESHOLD);
+    setManualLoadVideo(isVideo && size > VIDEO_LOAD_THRESHOLD);
+    setManualLoadAudio(isAudio && size > AUDIO_LOAD_THRESHOLD);
+    setManualLoadText(isText && size > TEXT_LOAD_THRESHOLD);
+    
+    // For content types that don't need loading events, mark as loaded
+    const needsLoadEvent = isImage || isVideo || isAudio;
+    if (!needsLoadEvent && wayfinderResult.url && !wayfinderResult.loading) {
+      setMediaLoaded(true);
+    }
+  }, [contentType, size, wayfinderResult.url, wayfinderResult.loading]);
+
+  // Reset media error when content changes or retry is triggered
+  useEffect(() => {
+    setMediaLoadError(false);
+  }, [id, retryCount]);
+
+  // Clear retry state when content loads successfully
+  useEffect(() => {
+    if (!wayfinderResult.loading && !wayfinderResult.error && wayfinderResult.url && isRetrying) {
+      setIsRetrying(false);
+    }
+  }, [wayfinderResult.loading, wayfinderResult.error, wayfinderResult.url, isRetrying]);
+
+  // Trigger background metadata enhancement for ArNS content
+  useEffect(() => {
+    if (txMeta.arnsName && txMeta.arnsGateway) {
+      // ArNS names are now pre-resolved, but we can still fetch enhanced metadata
+      arnsService.fetchMetadataInBackground(
+        txMeta.arnsName,
+        txMeta.id, // Now always a real transaction ID
+        txMeta.arnsGateway
+      );
+    }
+  }, [txMeta.arnsName, txMeta.id, txMeta.arnsGateway]);
+
+
+  // Notify parent component when gateway changes
+  useEffect(() => {
+    if (onGatewayChange && wayfinderResult.gateway) {
+      onGatewayChange(wayfinderResult.gateway);
+    }
+  }, [wayfinderResult.gateway, onGatewayChange]);
+
+  // Track component mount state and cleanup on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      // Release object URL on unmount
+      if (objectUrlKeyRef.current) {
+        objectUrlManager.release(objectUrlKeyRef.current);
+        objectUrlKeyRef.current = null;
+      }
+    };
+  }, []);
 
   // Handle Wayfinder content data and Object URL lifecycle
   useEffect(() => {
-    // Clean up previous Object URL
-    if (objectUrl) {
-      URL.revokeObjectURL(objectUrl);
-      setObjectUrl(null);
-    }
+    // Don't process if component is unmounting
+    if (!mountedRef.current) return;
 
     // Create Object URL for Wayfinder data if available
-    if (wayfinderResult.data) {
-      const newObjectUrl = URL.createObjectURL(wayfinderResult.data);
-      setObjectUrl(newObjectUrl);
+    // Skip Object URL creation for manifests and HTML that need domain context
+    const isManifestOrHtml = contentType.startsWith('application/x.arweave-manifest') || 
+                            contentType.startsWith('text/html') ||
+                            contentType === 'application/xhtml+xml';
+    const shouldUseDirectUrl = isManifestOrHtml && txMeta.arnsName;
+    
+    if (wayfinderResult.data && !wayfinderResult.loading && !shouldUseDirectUrl) {
+      // Generate a unique key for this content
+      const urlKey = `${txMeta.id}-${wayfinderResult.data.size}`;
       
-      // For text content, extract text from Blob automatically (no double-fetching)
+      // Release previous URL if key changed
+      if (objectUrlKeyRef.current && objectUrlKeyRef.current !== urlKey) {
+        objectUrlManager.release(objectUrlKeyRef.current);
+      }
+      
+      // Acquire new URL with reference counting
+      const newObjectUrl = objectUrlManager.acquire(wayfinderResult.data, urlKey);
+      objectUrlKeyRef.current = urlKey;
+      setObjectUrl(newObjectUrl);
+    } else if (shouldUseDirectUrl) {
+      // Clear object URL for manifests/HTML that need direct URLs
+      if (objectUrlKeyRef.current) {
+        objectUrlManager.release(objectUrlKeyRef.current);
+        objectUrlKeyRef.current = null;
+      }
+      setObjectUrl(null);
+    }
+    
+    // For text content, extract text from Blob automatically with memoization
+    if (wayfinderResult.data && !wayfinderResult.loading) {
       if ((contentType.startsWith('text/') && !contentType.startsWith('text/html') && !contentType.startsWith('text/xml')) ||
           ['text/plain', 'text/markdown'].includes(contentType)) {
         if (!manualLoadText && !textContent && !loadingText) {
-          setLoadingText(true);
-          wayfinderResult.data.text()
-            .then(text => {
-              setTextContent(text);
-              setErrorText(null);
-            })
-            .catch(() => setErrorText('Failed to extract text from verified content'))
-            .finally(() => setLoadingText(false));
+          // Check if we already have a text extraction in progress for this transaction
+          if (textExtractionRef.current.txId === txMeta.id && textExtractionRef.current.promise) {
+            // Reuse existing extraction promise
+            setLoadingText(true);
+            textExtractionRef.current.promise
+              .then(text => {
+                setTextContent(text);
+                setErrorText(null);
+              })
+              .catch(() => setErrorText('Failed to extract text from verified content'))
+              .finally(() => setLoadingText(false));
+          } else {
+            // Create new extraction promise and cache it
+            setLoadingText(true);
+            const extractionPromise = wayfinderResult.data.text();
+            textExtractionRef.current = { txId: txMeta.id, promise: extractionPromise };
+            
+            extractionPromise
+              .then(text => {
+                if (mountedRef.current) {
+                  setTextContent(text);
+                  setErrorText(null);
+                }
+              })
+              .catch(() => {
+                if (mountedRef.current) {
+                  setErrorText('Failed to extract text from verified content');
+                }
+              })
+              .finally(() => {
+                if (mountedRef.current) {
+                  setLoadingText(false);
+                }
+              });
+          }
         }
       }
     }
 
-    // Cleanup function - ensure no memory leaks
-    return () => {
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
-        setObjectUrl(null);
-      }
-    };
-  }, [wayfinderResult.data, wayfinderResult.loading, contentType, manualLoadText, txMeta.id]);
+  }, [wayfinderResult.data, wayfinderResult.loading, contentType, manualLoadText, txMeta.id, txMeta.arnsName]);
 
   // Iframe fallback detection for manifests and HTML
   useEffect(() => {
@@ -203,6 +370,61 @@ useEffect(() => {
   }, [contentType, directUrl, txMeta]);
 
   const renderMedia = () => {
+    // Show error state with retry button
+    if ((wayfinderResult.error && !wayfinderResult.loading) || mediaLoadError) {
+      return (
+        <div className="media-error-container">
+          <div className="media-error-icon">
+            <Icons.AlertCircle size={48} />
+          </div>
+          <div className="media-error-message">
+            Failed to load content
+          </div>
+          <div className="media-error-details">
+            {wayfinderResult.error?.includes('503') ? 'Gateway temporarily unavailable' :
+             wayfinderResult.error?.includes('502') ? 'Gateway error' :
+             wayfinderResult.error?.includes('504') ? 'Gateway timeout' :
+             wayfinderResult.error?.includes('timeout') ? 'Request timed out' :
+             mediaLoadError ? 'Content could not be displayed' :
+             'Network error'}
+          </div>
+          {/* Show attempted gateways if available */}
+          {wayfinderResult.errorDetails?.attemptedGateways && wayfinderResult.errorDetails.attemptedGateways.length > 0 && (
+            <div className="media-error-gateways">
+              <div className="gateway-attempts-label">Attempted gateways:</div>
+              <div className="gateway-attempts-list">
+                {wayfinderResult.errorDetails.attemptedGateways.map((gateway, index) => (
+                  <span key={index} className="gateway-attempt-item">{gateway}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          <button 
+            className="media-retry-btn"
+            onClick={() => {
+              if (!isRetrying) {
+                setIsRetrying(true);
+                setMediaLoadError(false);
+                setRetryCount(prev => prev + 1);
+                // Prevent rapid retries - but don't wait too long
+                setTimeout(() => setIsRetrying(false), 300);
+              }
+            }}
+            disabled={isRetrying}
+          >
+            {isRetrying ? <Icons.Loading size={16} /> : <Icons.Refresh size={16} />}
+            {isRetrying ? 'Retrying...' : 'Try Again'}
+          </button>
+          <button 
+            className="media-skip-btn"
+            onClick={() => onCorrupt?.(txMeta)}
+          >
+            Skip to Next
+          </button>
+        </div>
+      );
+    }
+    
     if (contentType.startsWith('image/') && manualLoad) {
       return (
         <button className="media-load-btn" onClick={() => { setManualLoad(false); setForceLoad(true); }} aria-label={`Load image, ${(size / 1024 / 1024).toFixed(2)} MB`}>
@@ -211,21 +433,65 @@ useEffect(() => {
       );
     }
     if (contentType.startsWith('image/')) {
+      // SVGs need special handling due to security restrictions with blob URLs
+      if (contentType === 'image/svg+xml') {
+        return (
+          <object
+            className="media-image media-svg"
+            data={manualLoad ? undefined : getContentUrl()}
+            type="image/svg+xml"
+            aria-label="SVG content"
+            onClick={() => onZoom?.(getContentUrl())}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onZoom?.(getContentUrl());
+              }
+            }}
+            role="button"
+            tabIndex={0}
+            onError={() => {
+              logger.warn('SVG failed to load', { 
+                txId: txMeta.id, 
+                contentType,
+                url: getContentUrl() 
+              });
+              setMediaLoadError(true);
+            }}
+            onLoad={() => {
+              setMediaLoaded(true);
+            }}
+          >
+            <div className="media-error">SVG content could not be displayed</div>
+          </object>
+        );
+      }
+      
       return (
         <img
           className="media-image"
-          src={manualLoad ? undefined : objectUrl || directUrl}
+          src={manualLoad ? undefined : getContentUrl()}
           alt="Roam content"
-          onClick={() => onZoom?.(objectUrl || directUrl)}
+          onClick={() => onZoom?.(getContentUrl())}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
-              onZoom?.(objectUrl || directUrl);
+              onZoom?.(getContentUrl());
             }
           }}
           role="button"
           tabIndex={0}
-          onError={() => onCorrupt?.(txMeta)}
+          onError={() => {
+            logger.warn('Media element failed to load', { 
+              txId: txMeta.id, 
+              contentType,
+              url: getContentUrl() 
+            });
+            setMediaLoadError(true);
+          }}
+          onLoad={() => {
+            setMediaLoaded(true);
+          }}
         />
       );
     }
@@ -241,10 +507,20 @@ useEffect(() => {
       return (
         <video
           className="media-element media-video"
-          src={manualLoadVideo ? undefined : objectUrl || directUrl}
+          src={manualLoadVideo ? undefined : getContentUrl()}
           controls
           preload="metadata"
-          onError={() => onCorrupt?.(txMeta)}
+          onError={() => {
+            logger.warn('Media element failed to load', { 
+              txId: txMeta.id, 
+              contentType,
+              url: getContentUrl() 
+            });
+            setMediaLoadError(true);
+          }}
+          onLoadedData={() => {
+            setMediaLoaded(true);
+          }}
         />
       );
     }
@@ -273,10 +549,20 @@ useEffect(() => {
           </div>
           <audio
             className="media-element media-audio"
-            src={manualLoadAudio ? undefined : objectUrl || directUrl}
+            src={manualLoadAudio ? undefined : getContentUrl()}
             controls
             preload="metadata"
-            onError={() => onCorrupt?.(txMeta)}
+            onError={() => {
+            logger.warn('Media element failed to load', { 
+              txId: txMeta.id, 
+              contentType,
+              url: getContentUrl() 
+            });
+            setMediaLoadError(true);
+          }}
+            onLoadedData={() => {
+              setMediaLoaded(true);
+            }}
           />
         </div>
       );
@@ -289,7 +575,7 @@ useEffect(() => {
           <iframe 
             ref={iframeRef} 
             className="media-pdf" 
-            src={objectUrl || directUrl}
+            src={getContentUrl()}
             title="PDF Viewer" 
           />
         </div>
@@ -309,7 +595,7 @@ useEffect(() => {
           <iframe
             ref={iframeRef}
             className="media-iframe"
-            src={objectUrl || directUrl}
+            src={getContentUrl()}
             sandbox="allow-scripts allow-same-origin"
             title="Permaweb content preview"
           />
@@ -336,15 +622,32 @@ useEffect(() => {
           <button 
             className="media-load-btn" 
             onClick={async () => {
-              setLoadingText(true);
-              try {
-                const text = await wayfinderResult.data!.text();
-                setTextContent(text);
-                setErrorText(null);
-              } catch (error) {
-                setErrorText('Failed to read text content');
-              } finally {
-                setLoadingText(false);
+              // Check if we already have cached text extraction for this transaction
+              if (textExtractionRef.current.txId === txMeta.id && textExtractionRef.current.promise) {
+                setLoadingText(true);
+                try {
+                  const text = await textExtractionRef.current.promise;
+                  setTextContent(text);
+                  setErrorText(null);
+                } catch (_error) {
+                  setErrorText('Failed to read text content');
+                } finally {
+                  setLoadingText(false);
+                }
+              } else {
+                // Create new extraction promise and cache it
+                setLoadingText(true);
+                try {
+                  const extractionPromise = wayfinderResult.data!.text();
+                  textExtractionRef.current = { txId: txMeta.id, promise: extractionPromise };
+                  const text = await extractionPromise;
+                  setTextContent(text);
+                  setErrorText(null);
+                } catch (_error) {
+                  setErrorText('Failed to read text content');
+                } finally {
+                  setLoadingText(false);
+                }
               }
             }}
           >
@@ -372,11 +675,23 @@ useEffect(() => {
               <button 
                 className="media-load-btn" 
                 onClick={async () => {
-                  try {
-                    const text = await wayfinderResult.data!.text();
-                    setTextContent(text);
-                  } catch (error) {
-                    setErrorText('Failed to read content as text');
+                  // Use cached extraction if available
+                  if (textExtractionRef.current.txId === txMeta.id && textExtractionRef.current.promise) {
+                    try {
+                      const text = await textExtractionRef.current.promise;
+                      setTextContent(text);
+                    } catch (_error) {
+                      setErrorText('Failed to read content as text');
+                    }
+                  } else {
+                    try {
+                      const extractionPromise = wayfinderResult.data!.text();
+                      textExtractionRef.current = { txId: txMeta.id, promise: extractionPromise };
+                      const text = await extractionPromise;
+                      setTextContent(text);
+                    } catch (_error) {
+                      setErrorText('Failed to read content as text');
+                    }
                   }
                 }}
               >
@@ -433,12 +748,16 @@ useEffect(() => {
         {renderMedia()}
         {privacyOn && <div className="privacy-screen" />}
         
-        {/* Subtle loading indicator for Wayfinder - only show when actually verifying */}
-        {wayfinderResult.loading && wayfinderResult.verificationStatus.status === 'verifying' && (
+        {/* Unified loading indicator - show only one loading state at a time */}
+        {(!wayfinderResult.error && (wayfinderResult.loading || (!mediaLoaded && !mediaLoadError && !manualLoad && !manualLoadVideo && !manualLoadAudio && !manualLoadText))) && (
           <div className="wayfinder-loading-overlay">
             <div className="wayfinder-loading-indicator">
               <Icons.Loading size={16} />
-              <span>Verifying content...</span>
+              <span>
+                {wayfinderResult.verificationStatus.status === 'verifying' 
+                  ? 'Loading and Verifying content...' 
+                  : 'Loading content...'}
+              </span>
             </div>
           </div>
         )}

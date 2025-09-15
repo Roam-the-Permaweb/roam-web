@@ -1,8 +1,11 @@
-import { useState } from 'preact/hooks'
+import { useState, useEffect } from 'preact/hooks'
 import { DateRangeSlider } from './DateRangeSlider'
+import { BlockHeightPicker } from './BlockHeightPicker'
 import { Icons } from './Icons'
-import { useWayfinderSettings } from '../hooks/useWayfinderSettings'
+import { useSimplifiedWayfinderSettings } from '../hooks/useSimplifiedWayfinderSettings'
+import { useBlockHeightMode } from '../hooks/useBlockHeightMode'
 import type { MediaType, TxMeta } from '../constants'
+import type { RoutingMode } from '../hooks/useSimplifiedWayfinderSettings'
 
 interface DateRange {
   start: Date
@@ -33,6 +36,7 @@ interface ChannelsDrawerProps {
   queueLoading: boolean
   isResolvingBlocks?: boolean
   actualBlocks?: { min: number; max: number } | null // Actual blocks when syncing
+  tempBlocks?: { min: number; max: number } | null // Temp blocks for block mode
   onResetRange: () => void
   onApplyRange: () => void
   onBlockRangeEstimated?: (minBlock: number, maxBlock: number) => void
@@ -43,17 +47,18 @@ export function ChannelsDrawer({
   onClose,
   currentMedia,
   onMediaChange,
-  currentTx,
-  ownerAddress,
-  onOwnerFilterChange,
-  recency,
-  onRecencyChange,
+  currentTx: _currentTx,
+  ownerAddress: _ownerAddress,
+  onOwnerFilterChange: _onOwnerFilterChange,
+  recency: _recency,
+  onRecencyChange: _onRecencyChange,
   tempRange,
   setTempRange,
   rangeError,
   queueLoading,
   isResolvingBlocks = false,
   actualBlocks,
+  tempBlocks,
   onResetRange,
   onApplyRange,
   onBlockRangeEstimated
@@ -61,27 +66,69 @@ export function ChannelsDrawer({
   // Wayfinder settings management
   const { 
     settings: wayfinderSettings, 
-    updateSettings: updateWayfinderSettings, 
-    resetToDefaults,
-    validationErrors
-  } = useWayfinderSettings()
+    updateSettings: updateWayfinderSettings
+  } = useSimplifiedWayfinderSettings()
   
-  // Advanced settings visibility
+  // Block height mode toggle
+  const { isBlockMode, toggleMode } = useBlockHeightMode()
+  
+  // Advanced settings state
   const [showAdvanced, setShowAdvanced] = useState(false)
+  const [customCuUrl, setCustomCuUrl] = useState(wayfinderSettings.cuUrl || '')
+  const [cuUrlError, setCuUrlError] = useState('')
+  const [showTelemetryInfo, setShowTelemetryInfo] = useState(false)
+  
+  // Update customCuUrl when wayfinderSettings changes
+  useEffect(() => {
+    setCustomCuUrl(wayfinderSettings.cuUrl || '')
+  }, [wayfinderSettings.cuUrl])
 
   const handleMediaChange = (media: MediaType) => {
     onMediaChange(media)
     onClose()
   }
-
-  const handleRecencyChange = (newRecency: 'new' | 'old') => {
-    onRecencyChange(newRecency)
-    onClose()
+  
+  // Validation function for CU URL
+  const validateCuUrl = (url: string) => {
+    if (!url) return true // Empty is valid (uses default)
+    
+    try {
+      const parsed = new URL(url)
+      const isValid = parsed.protocol === 'https:' || parsed.protocol === 'http:'
+      setCuUrlError(isValid ? '' : 'URL must start with http:// or https://')
+      return isValid
+    } catch (_error) {
+      setCuUrlError('Invalid URL format')
+      return false
+    }
+  }
+  
+  // Apply CU URL changes
+  const handleApplyCuUrl = () => {
+    if (validateCuUrl(customCuUrl)) {
+      updateWayfinderSettings({ 
+        cuUrl: customCuUrl || undefined // Empty string becomes undefined
+      })
+    }
   }
 
-  const handleOwnerFilter = (address?: string) => {
-    onOwnerFilterChange(address)
-    onClose()
+  const routingModeInfo: Record<RoutingMode, { label: string; description: string }> = {
+    'balanced': {
+      label: 'Balanced',
+      description: 'Best mix of speed and load distribution'
+    },
+    'fast': {
+      label: 'Fast',
+      description: 'Always use the fastest responding gateway'
+    },
+    'fair-share': {
+      label: 'Fair Share',
+      description: 'Cycle through gateways evenly'
+    },
+    'self': {
+      label: 'Self',
+      description: 'Use the gateway you\'re currently accessing'
+    }
   }
 
   return (
@@ -127,381 +174,233 @@ export function ChannelsDrawer({
               <span className="content-icon"><Icons.ArFS /></span>
               <span className="content-label">ArFS</span>
             </button>
+            <button className={`content-card ${currentMedia === 'arns' ? 'active' : ''}`} onClick={() => handleMediaChange('arns')}>
+              <span className="content-icon"><Icons.ArNS /></span>
+              <span className="content-label">ArNS</span>
+            </button>
           </div>
         </div>
         
-        {/* Creator Section */}
-        {(currentTx || ownerAddress) && (
-          <div className="section">
-            <h2 className="section-title">Creator</h2>
-            <div className="creator-controls">
-              {ownerAddress ? (
-                <>
-                  <div className="creator-info">
-                    <span className="creator-icon"><Icons.Creator /></span>
-                    <span className="creator-address">{ownerAddress.slice(0, 8)}...</span>
-                  </div>
-                  <button className="creator-btn active" onClick={() => handleOwnerFilter(undefined)}>
-                    <span className="creator-icon"><Icons.Everyone /></span>
-                    <span>Show Everyone</span>
-                  </button>
-                </>
-              ) : currentTx ? (
-                <button className="creator-btn" onClick={() => handleOwnerFilter(currentTx.owner.address)}>
-                  <span className="creator-icon"><Icons.Creator /></span>
-                  <span>More from this Creator</span>
-                </button>
-              ) : null}
+        {/* Date/Block Range Filter Section */}
+        <div className="section filter-range-section">
+          <div className="section-header centered">
+            <h2 className="section-title">Filter Range</h2>
+            <div className="filter-mode-selector">
+              <button 
+                className={`filter-mode-btn ${!isBlockMode ? 'active' : ''}`}
+                onClick={() => isBlockMode && toggleMode()}
+                type="button"
+              >
+                <Icons.Calendar size={16} />
+                <span className="mode-label">Dates</span>
+              </button>
+              <button 
+                className={`filter-mode-btn ${isBlockMode ? 'active' : ''}`}
+                onClick={() => !isBlockMode && toggleMode()}
+                type="button"
+              >
+                <Icons.Hash size={16} />
+                <span className="mode-label">Blocks</span>
+              </button>
             </div>
           </div>
-        )}
-        
-        {/* Time Period Section */}
-        <div className="section">
-          <h2 className="section-title">Time Period</h2>
-          <div className="time-controls">
-            <button className={`time-btn ${recency === 'new' ? 'active' : ''}`} onClick={() => handleRecencyChange('new')}>
-              <span className="time-icon"><Icons.Recent /></span>
-              <span>Recent</span>
-            </button>
-            <button className={`time-btn ${recency === 'old' ? 'active' : ''}`} onClick={() => handleRecencyChange('old')}>
-              <span className="time-icon"><Icons.Archive /></span>
-              <span>Archive</span>
-            </button>
-          </div>
+          
+          {isBlockMode ? (
+            <BlockHeightPicker
+              tempRange={{ 
+                from: tempBlocks?.min || actualBlocks?.min || 0, 
+                to: tempBlocks?.max || actualBlocks?.max || 1666042 
+              }}
+              setTempRange={(range) => {
+                // Store the block range for later use
+                onBlockRangeEstimated?.(range.from, range.to)
+              }}
+              onBlockRangeEstimated={(range) => {
+                onBlockRangeEstimated?.(range.from, range.to)
+              }}
+              isLoading={isResolvingBlocks}
+              actualBlocks={actualBlocks ? { from: actualBlocks.min, to: actualBlocks.max } : undefined}
+              rangeError={rangeError}
+              queueLoading={queueLoading}
+              onResetRange={onResetRange}
+              onApplyRange={onApplyRange}
+            />
+          ) : (
+            <DateRangeSlider
+              tempRange={tempRange}
+              setTempRange={setTempRange}
+              onBlockRangeEstimated={onBlockRangeEstimated}
+              isLoading={isResolvingBlocks}
+              actualBlocks={actualBlocks || undefined}
+              rangeError={rangeError}
+              queueLoading={queueLoading}
+              onResetRange={onResetRange}
+              onApplyRange={onApplyRange}
+            />
+          )}
         </div>
-        
-        <DateRangeSlider
-          tempRange={tempRange}
-          setTempRange={setTempRange}
-          onBlockRangeEstimated={onBlockRangeEstimated}
-          isLoading={isResolvingBlocks}
-          actualBlocks={actualBlocks || undefined}
-          rangeError={rangeError}
-          queueLoading={queueLoading}
-          onResetRange={onResetRange}
-          onApplyRange={onApplyRange}
-        />
 
         {/* AR.IO Wayfinder Settings Section */}
         <div className="section">
-          <div className="section-header">
-            <div className="section-title-with-status">
-              <h2 className="section-title">AR.IO Wayfinder (Experimental)</h2>
-            </div>
-            <button 
-              className={`advanced-toggle ${showAdvanced ? 'active' : ''}`}
-              onClick={() => setShowAdvanced(!showAdvanced)}
-              aria-label={`${showAdvanced ? 'Hide' : 'Show'} advanced settings`}
-            >
-              <Icons.Settings />
-              Advanced
-            </button>
+          <div className="section-header centered">
+            <h2 className="section-title">AR.IO Wayfinder</h2>
           </div>
-          
-          {/* General Error Display */}
-          {validationErrors.general && (
-            <div className="general-error">
-              <Icons.AlertTriangle />
-              {validationErrors.general}
-            </div>
-          )}
           
           <div className="settings-controls">
             {/* Master Control */}
             <div className="setting-row">
               <div className="setting-info">
                 <span className="setting-label">Enable Wayfinder</span>
-                <span className="setting-description">Smart gateway routing + content verification via AR.IO network</span>
+                <span className="setting-description">Smart gateway routing via AR.IO network</span>
               </div>
               <button 
-                className={`toggle-btn ${wayfinderSettings.enableWayfinder ? 'active' : ''}`}
-                onClick={() => updateWayfinderSettings({ enableWayfinder: !wayfinderSettings.enableWayfinder })}
-                aria-label={`${wayfinderSettings.enableWayfinder ? 'Disable' : 'Enable'} AR.IO Wayfinder`}
+                className={`toggle-btn ${wayfinderSettings.enabled ? 'active' : ''}`}
+                onClick={() => updateWayfinderSettings({ enabled: !wayfinderSettings.enabled })}
+                aria-label={`${wayfinderSettings.enabled ? 'Disable' : 'Enable'} Wayfinder`}
               >
                 <div className="toggle-indicator" />
               </button>
             </div>
 
-            {/* Advanced Configuration */}
-            {showAdvanced && (
-              <div className="advanced-settings">
-                <div className="subsection">
-                  <h3 className="subsection-title">Gateway Provider</h3>
-                  
-                  <div className="setting-row">
-                    <div className="setting-info">
-                      <span className="setting-label">Provider Type</span>
-                      <span className="setting-description">How gateways are selected and cached</span>
-                    </div>
-                    <select 
-                      className="setting-select"
-                      value={wayfinderSettings.gatewayProvider}
-                      onChange={(e) => updateWayfinderSettings({ gatewayProvider: e.currentTarget.value as 'network' | 'static' | 'simple-cache' })}
-                    >
-                      <option value="network">Network (AR.IO)</option>
-                      <option value="static">Static List</option>
-                      <option value="simple-cache">Cached Network</option>
-                    </select>
+            {/* Routing Mode - Only show when Wayfinder is enabled */}
+            {wayfinderSettings.enabled && (
+              <>
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <span className="setting-label">Routing Mode</span>
+                    <span className="setting-description">{routingModeInfo[wayfinderSettings.routingMode].description}</span>
                   </div>
-
-                  <div className="setting-row">
-                    <div className="setting-info">
-                      <span className="setting-label">Gateway Limit</span>
-                      <span className="setting-description">Maximum number of gateways to use</span>
-                    </div>
-                    <input 
-                      type="number"
-                      className="setting-input"
-                      value={wayfinderSettings.gatewayLimit}
-                      min="1"
-                      max="20"
-                      onChange={(e) => updateWayfinderSettings({ gatewayLimit: parseInt(e.currentTarget.value) || 5 })}
-                    />
-                  </div>
-
-                  <div className="setting-row">
-                    <div className="setting-info">
-                      <span className="setting-label">Cache Timeout</span>
-                      <span className="setting-description">Gateway cache duration (minutes)</span>
-                    </div>
-                    <input 
-                      type="number"
-                      className="setting-input"
-                      value={wayfinderSettings.cacheTimeoutMinutes}
-                      min="1"
-                      max="60"
-                      onChange={(e) => updateWayfinderSettings({ cacheTimeoutMinutes: parseInt(e.currentTarget.value) || 1 })}
-                    />
-                  </div>
-
-                  {wayfinderSettings.gatewayProvider === 'static' && (
-                    <div className="setting-row">
-                      <div className="setting-info">
-                        <span className="setting-label">Static Gateways</span>
-                        <span className="setting-description">Comma-separated gateway URLs</span>
-                      </div>
-                      <div>
-                        <textarea 
-                          className={`setting-textarea ${validationErrors.staticGateways ? 'error' : ''}`}
-                          value={wayfinderSettings.staticGateways.join(', ')}
-                          placeholder="https://arweave.net, https://permagate.io"
-                          onChange={(e) => {
-                            const gateways = e.currentTarget.value.split(',').map(g => g.trim()).filter(g => g)
-                            updateWayfinderSettings({ staticGateways: gateways })
-                          }}
-                        />
-                        {validationErrors.staticGateways && (
-                          <div className="validation-error">{validationErrors.staticGateways}</div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="subsection">
-                  <h3 className="subsection-title">Routing Strategy</h3>
-                  
-                  <div className="setting-row">
-                    <div className="setting-info">
-                      <span className="setting-label">Strategy Type</span>
-                      <span className="setting-description">How gateways are selected for content delivery</span>
-                    </div>
-                    <select 
-                      className="setting-select"
-                      value={wayfinderSettings.routingStrategy}
-                      onChange={(e) => updateWayfinderSettings({ routingStrategy: e.currentTarget.value as 'random' | 'fastest-ping' | 'round-robin' | 'static' | 'preferred-fallback' })}
-                    >
-                      <option value="random">Random</option>
-                      <option value="fastest-ping">Fastest Ping</option>
-                      <option value="round-robin">Round Robin</option>
-                      <option value="static">Static Gateway</option>
-                      <option value="preferred-fallback">Preferred + Fallback</option>
-                    </select>
-                  </div>
-
-                  {wayfinderSettings.routingStrategy === 'static' && (
-                    <div className="setting-row">
-                      <div className="setting-info">
-                        <span className="setting-label">Static Gateway URL</span>
-                        <span className="setting-description">Single gateway to use for all requests</span>
-                      </div>
-                      <div>
-                        <input 
-                          type="url"
-                          className={`setting-input ${validationErrors.staticRoutingGateway ? 'error' : ''}`}
-                          value={wayfinderSettings.staticRoutingGateway}
-                          placeholder="https://arweave.net"
-                          onChange={(e) => updateWayfinderSettings({ staticRoutingGateway: e.currentTarget.value.trim() })}
-                        />
-                        {validationErrors.staticRoutingGateway && (
-                          <div className="validation-error">{validationErrors.staticRoutingGateway}</div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {wayfinderSettings.routingStrategy === 'preferred-fallback' && (
-                    <div className="setting-row">
-                      <div className="setting-info">
-                        <span className="setting-label">Preferred Gateway URL</span>
-                        <span className="setting-description">Primary gateway, falls back to random if unavailable</span>
-                      </div>
-                      <div>
-                        <input 
-                          type="url"
-                          className={`setting-input ${validationErrors.preferredGateway ? 'error' : ''}`}
-                          value={wayfinderSettings.preferredGateway}
-                          placeholder="https://arweave.net"
-                          onChange={(e) => updateWayfinderSettings({ preferredGateway: e.currentTarget.value.trim() })}
-                        />
-                        {validationErrors.preferredGateway && (
-                          <div className="validation-error">{validationErrors.preferredGateway}</div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {wayfinderSettings.routingStrategy === 'fastest-ping' && (
-                    <div className="setting-row">
-                      <div className="setting-info">
-                        <span className="setting-label">Ping Timeout (ms)</span>
-                        <span className="setting-description">Maximum time to wait for ping responses</span>
-                      </div>
-                      <div>
-                        <input 
-                          type="number"
-                          className="setting-input"
-                          value={wayfinderSettings.routingTimeoutMs}
-                          min="100"
-                          max="5000"
-                          step="100"
-                          onChange={(e) => updateWayfinderSettings({ routingTimeoutMs: parseInt(e.currentTarget.value) || 500 })}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="subsection">
-                  <h3 className="subsection-title">Verification Settings</h3>
-                  
-                  <div className="setting-row">
-                    <div className="setting-info">
-                      <span className="setting-label">Verification Strategy</span>
-                      <span className="setting-description">
-                        Method used for content verification
-                        {wayfinderSettings.verificationStrategy === 'hash' && 
-                          " - Compares hashes from multiple trusted gateways"
-                        }
-                      </span>
-                    </div>
-                    <select 
-                      className="setting-select"
-                      value={wayfinderSettings.verificationStrategy}
-                      onChange={(e) => updateWayfinderSettings({ verificationStrategy: e.currentTarget.value as 'hash' | 'none' })}
-                    >
-                      <option value="hash">Hash-based</option>
-                      <option value="none">Disabled</option>
-                    </select>
-                  </div>
-
-                  <div className="setting-row">
-                    <div className="setting-info">
-                      <span className="setting-label">Verification Timeout</span>
-                      <span className="setting-description">Maximum verification time (ms)</span>
-                    </div>
-                    <div>
-                      <input 
-                        type="number"
-                        className="setting-input"
-                        value={wayfinderSettings.verificationTimeoutMs}
-                        min="1000"
-                        max="30000"
-                        step="1000"
-                        onChange={(e) => updateWayfinderSettings({ verificationTimeoutMs: parseInt(e.currentTarget.value) || 20000 })}
-                      />
-                    </div>
-                  </div>
-
-                  {wayfinderSettings.verificationStrategy === 'hash' && (
-                    <div className="setting-row">
-                      <div className="setting-info">
-                        <span className="setting-label">Trusted Gateways</span>
-                        <span className="setting-description">
-                          Gateways used for hash comparison verification
-                        </span>
-                      </div>
-                      <div>
-                        <textarea 
-                          className={`setting-textarea ${validationErrors.trustedGateways ? 'error' : ''}`}
-                          value={wayfinderSettings.trustedGateways.join(', ')}
-                          placeholder="https://permagate.io, https://vilenarios.com"
-                          onChange={(e) => {
-                            const gateways = e.currentTarget.value.split(',').map(g => g.trim()).filter(g => g)
-                            updateWayfinderSettings({ trustedGateways: gateways })
-                          }}
-                        />
-                        {validationErrors.trustedGateways && (
-                          <div className="validation-error">{validationErrors.trustedGateways}</div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="subsection">
-                  <h3 className="subsection-title">AO Configuration</h3>
-                  
-                  <div className="setting-row">
-                    <div className="setting-info">
-                      <span className="setting-label">AO Compute Unit URL</span>
-                      <span className="setting-description">Custom AO CU for AR.IO network operations</span>
-                    </div>
-                    <div>
-                      <input 
-                        type="url"
-                        className={`setting-input ${validationErrors.aoCuUrl ? 'error' : ''}`}
-                        value={wayfinderSettings.aoCuUrl}
-                        placeholder="https://cu.ardrive.io"
-                        onChange={(e) => updateWayfinderSettings({ aoCuUrl: e.currentTarget.value.trim() })}
-                      />
-                      {validationErrors.aoCuUrl && (
-                        <div className="validation-error">{validationErrors.aoCuUrl}</div>
-                      )}
-                    </div>
+                  <div className="routing-mode-selector">
+                    {(Object.keys(routingModeInfo) as RoutingMode[]).map((mode) => (
+                      <button
+                        key={mode}
+                        className={`routing-mode-btn ${wayfinderSettings.routingMode === mode ? 'active' : ''}`}
+                        onClick={() => updateWayfinderSettings({ routingMode: mode })}
+                        aria-label={`Select ${routingModeInfo[mode].label} routing mode`}
+                      >
+                        {routingModeInfo[mode].label}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                <div className="subsection">
-                  <h3 className="subsection-title">Future Features</h3>
-                  
-                  <div className="setting-row">
-                    <div className="setting-info">
-                      <span className="setting-label">GraphQL Routing (Coming Soon)</span>
-                      <span className="setting-description">Use AR.IO network for metadata queries</span>
-                    </div>
-                    <button 
-                      className="toggle-btn disabled"
-                      disabled
-                      aria-label="GraphQL routing not yet available"
-                    >
-                      <div className="toggle-indicator" />
-                    </button>
+                {/* Verified Browsing */}
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <span className="setting-label">Verified Browsing</span>
+                    <span className="setting-description">
+                      Cryptographic proof that content hasn't been tampered with
+                    </span>
                   </div>
-                </div>
-
-                <div className="subsection">
                   <button 
-                    className="reset-btn"
-                    onClick={resetToDefaults}
-                    aria-label="Reset all Wayfinder settings to defaults"
+                    className={`toggle-btn ${wayfinderSettings.verifiedBrowsing ? 'active' : ''}`}
+                    onClick={() => updateWayfinderSettings({ verifiedBrowsing: !wayfinderSettings.verifiedBrowsing })}
+                    aria-label={`${wayfinderSettings.verifiedBrowsing ? 'Disable' : 'Enable'} verified browsing`}
                   >
-                    <Icons.RotateCcw />
-                    Reset to Defaults
+                    <div className="toggle-indicator" />
                   </button>
                 </div>
-              </div>
+
+                {/* Telemetry - Help Improve AR.IO Network */}
+                <div className="setting-row">
+                  <div className="setting-info">
+                    <span className="setting-label">
+                      Help Improve AR.IO Network
+                      <button 
+                        className="info-btn"
+                        onClick={() => setShowTelemetryInfo(!showTelemetryInfo)}
+                        aria-label="Learn more about telemetry"
+                      >
+                        <Icons.Info size={14} />
+                      </button>
+                    </span>
+                    <span className="setting-description">
+                      Share anonymous routing metrics (10% sample)
+                    </span>
+                    {showTelemetryInfo && (
+                      <div className="telemetry-info">
+                        <p>When enabled, Roam shares anonymous performance data to help improve the AR.IO network:</p>
+                        <ul>
+                          <li>• Gateway routing performance</li>
+                          <li>• Request success/failure rates</li>
+                          <li>• Response times</li>
+                        </ul>
+                        <p><strong>No personal data, transaction IDs, or content information is ever shared.</strong></p>
+                      </div>
+                    )}
+                  </div>
+                  <button 
+                    className={`toggle-btn ${wayfinderSettings.telemetryEnabled ? 'active' : ''}`}
+                    onClick={() => updateWayfinderSettings({ telemetryEnabled: !wayfinderSettings.telemetryEnabled })}
+                    aria-label={`${wayfinderSettings.telemetryEnabled ? 'Disable' : 'Enable'} telemetry`}
+                  >
+                    <div className="toggle-indicator" />
+                  </button>
+                </div>
+
+                {/* Advanced Settings */}
+                <div className="advanced-settings">
+                  <button 
+                    className="advanced-toggle"
+                    onClick={() => setShowAdvanced(!showAdvanced)}
+                    aria-label={showAdvanced ? "Hide advanced settings" : "Show advanced settings"}
+                  >
+                    <Icons.ChevronDown size={16} className={showAdvanced ? 'rotated' : ''} />
+                    <span>Advanced Settings</span>
+                  </button>
+                  
+                  {showAdvanced && (
+                    <div className="advanced-content">
+                      <div className="setting-row">
+                        <div className="setting-info">
+                          <span className="setting-label">AO Compute Unit URL</span>
+                          <span className="setting-description">
+                            Override the default CU for gateway information
+                          </span>
+                        </div>
+                        <div className="input-group">
+                          <input
+                            type="text"
+                            className={`text-input ${cuUrlError ? 'error' : ''}`}
+                            value={customCuUrl}
+                            onChange={(e) => {
+                              const target = e.target as HTMLInputElement
+                              setCustomCuUrl(target.value)
+                              validateCuUrl(target.value)
+                            }}
+                            onBlur={handleApplyCuUrl}
+                            placeholder="https://cu.ardrive.io"
+                          />
+                          {cuUrlError && (
+                            <span className="error-message">{cuUrlError}</span>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="cu-info">
+                        <Icons.Info size={14} />
+                        <span>
+                          The AO Compute Unit provides gateway information from the AR.IO network. 
+                          Only change this if the default CU is experiencing issues. 
+                          Common alternatives: https://cu.ao-testnet.xyz
+                        </span>
+                      </div>
+                      
+                      {customCuUrl && (
+                        <button 
+                          className="reset-cu-btn"
+                          onClick={() => {
+                            setCustomCuUrl('')
+                            updateWayfinderSettings({ cuUrl: undefined })
+                          }}
+                        >
+                          Reset to Default
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </>
             )}
           </div>
         </div>

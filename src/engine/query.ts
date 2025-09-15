@@ -1,6 +1,17 @@
 import { logger } from "../utils/logger";
 import { CONTENT_TYPES, APP_OWNERS, type MediaType, type TxMeta } from "../constants";
 
+// GraphQL Types
+interface GraphQLError {
+  message: string;
+  extensions?: Record<string, unknown>;
+}
+
+interface GraphQLResponse<T> {
+  data?: T;
+  errors?: GraphQLError[];
+}
+
 // --------------------------------------------------------------------------
 // Configuration & Constants
 // --------------------------------------------------------------------------
@@ -103,11 +114,11 @@ export async function getCurrentBlockHeight(gateway: string): Promise<number> {
  * Paginates through all pages using cursors until completion.
  */
 
-async function fetchWithRetry(
+async function fetchWithRetry<T>(
   gw: string,
-  payload: any,
+  payload: RequestInit,
   attempts = 3
-): Promise<any> {
+): Promise<T> {
   let lastError: Error | null = null;
   
   for (let i = 0; i < attempts; i++) {
@@ -122,10 +133,10 @@ async function fetchWithRetry(
         throw new Error(`Client error: ${res.status} ${res.statusText}`);
       }
       
-      const json = await res.json();
+      const json = await res.json() as GraphQLResponse<T>;
       if (json.errors?.length) {
         // Check if errors are retryable
-        const errorMessages = json.errors.map((e: any) => e.message).join("; ");
+        const errorMessages = json.errors.map((e) => e.message).join("; ");
         const isRetryable = errorMessages.includes('timeout') || 
                            errorMessages.includes('rate limit') ||
                            errorMessages.includes('server error');
@@ -135,7 +146,7 @@ async function fetchWithRetry(
         }
         lastError = new Error(errorMessages);
       } else {
-        return json.data;
+        return json.data as T;
       }
     } catch (err) {
       lastError = err as Error;
@@ -261,7 +272,7 @@ export async function fetchTxsRange(
           body: JSON.stringify({ query, variables }),
         };
         
-        const data = await fetchWithRetry(gw, payload);
+        const data = await fetchWithRetry<any>(gw, payload);
         const edges = data.transactions.edges;
         
         for (const edge of edges) {
@@ -345,7 +356,7 @@ export async function fetchTxMetaById(txid: string): Promise<TxMeta> {
     };
 
     try {
-      const data = await fetchWithRetry(gw, payload);
+      const data = await fetchWithRetry<any>(gw, payload);
       const edges = data?.transactions?.edges;
       if (!edges || !edges.length) throw new Error("No transaction found");
 

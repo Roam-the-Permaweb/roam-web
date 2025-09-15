@@ -1,15 +1,52 @@
 import { Icons } from './Icons'
+import { ProgressRing } from './ProgressRing'
 import type { VerificationStatus } from '../services/wayfinderTypes'
 
 interface VerificationIndicatorProps {
   status: VerificationStatus
   className?: string
+  showProgressText?: boolean
 }
 
-export function VerificationIndicator({ status, className = '' }: VerificationIndicatorProps) {
+export function VerificationIndicator({ 
+  status, 
+  className = '',
+  showProgressText = false 
+}: VerificationIndicatorProps) {
   // Don't show indicator for pending or not-verified states
   if (status.status === 'pending' || status.status === 'not-verified') {
     return null
+  }
+
+  // Always show progress text when verifying for better mobile UX
+  const shouldShowText = showProgressText || status.status === 'verifying'
+
+  const getStatusMessage = () => {
+    if (status.status === 'verifying' && status.progress) {
+      const { stage, percentage } = status.progress
+      
+      switch (stage) {
+        case 'routing':
+          return 'Finding gateway...'
+        case 'downloading':
+          return 'Loading content...' // No percentage - we don't have real download progress
+        case 'verifying':
+          return `Verifying ${Math.round(percentage)}%` // Real verification progress
+        default:
+          return 'Loading...'
+      }
+    }
+    
+    switch (status.status) {
+      case 'verified':
+        return 'Verified ✓'
+      case 'verifying':
+        return 'Verifying...'
+      case 'failed':
+        return 'Verification failed'
+      default:
+        return ''
+    }
   }
 
   const getIndicatorProps = () => {
@@ -23,16 +60,16 @@ export function VerificationIndicator({ status, className = '' }: VerificationIn
         }
       case 'verifying':
         return {
-          icon: Icons.Loading,
+          icon: null, // Use progress ring instead
           color: '#f59e0b', // amber-500
-          title: 'Verifying content integrity...',
+          title: getStatusMessage(),
           className: 'verification-verifying'
         }
       case 'failed':
         return {
           icon: Icons.AlertTriangle,
           color: '#ef4444', // red-500
-          title: `Content verification failed${status.error ? `: ${status.error}` : ''}`,
+          title: getStatusMessage(),
           className: 'verification-failed'
         }
       default:
@@ -51,7 +88,21 @@ export function VerificationIndicator({ status, className = '' }: VerificationIn
       title={title}
       style={{ '--verification-color': color } as any}
     >
-      <IconComponent size={12} />
+      {status.status === 'verifying' && status.progress ? (
+        <ProgressRing 
+          progress={status.progress.percentage} 
+          size={16} 
+          strokeWidth={2}
+        />
+      ) : IconComponent ? (
+        <IconComponent size={12} />
+      ) : null}
+      
+      {shouldShowText && (
+        <span className="verification-status-text">
+          {getStatusMessage()}
+        </span>
+      )}
     </div>
   )
 }

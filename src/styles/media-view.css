@@ -246,6 +246,23 @@
   }
 }
 
+/* SVG specific styling for object element */
+.media-svg {
+  display: block;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* SVG error fallback */
+.media-svg .media-error {
+  padding: 2rem;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.875rem;
+}
+
 /* Video player - natural aspect ratio - optimized for fixed bottom controls */
 .media-video {
   width: 100%;
@@ -462,6 +479,107 @@
   color: rgba(255, 107, 107, 0.9);
 }
 
+/* Enhanced error state with retry */
+.media-error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  padding: 2rem;
+  gap: 1rem;
+  text-align: center;
+}
+
+.media-error-icon {
+  color: rgba(255, 107, 107, 0.7);
+  margin-bottom: 0.5rem;
+}
+
+.media-error-message {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.media-error-details {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 1rem;
+}
+
+.media-retry-btn,
+.media-skip-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 140px;
+}
+
+.media-retry-btn {
+  background: linear-gradient(135deg, #FF6A00 0%, #FF00CC 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(255, 106, 0, 0.3);
+}
+
+.media-retry-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 106, 0, 0.4);
+}
+
+.media-skip-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.media-skip-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Gateway attempts display */
+.media-error-gateways {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.gateway-attempts-label {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.gateway-attempts-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.gateway-attempt-item {
+  font-size: 0.8125rem;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 106, 0, 0.1);
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 106, 0, 0.2);
+}
+
 /* Media actions styling moved to app.css for consistency */
 
 /* Privacy screen overlay */
@@ -549,6 +667,35 @@
   flex-direction: column;
   align-items: center;
   width: 100%;
+}
+
+/* Bounce animation for navigation boundaries */
+.media-container.bounce-start {
+  animation: bounceStart 0.4s ease-out;
+  animation-fill-mode: both;
+}
+
+/* Prevent animation during loading states */
+.media-container.loading {
+  animation: none !important;
+}
+
+@keyframes bounceStart {
+  0% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(15px);
+  }
+  50% {
+    transform: translateX(-8px);
+  }
+  75% {
+    transform: translateX(4px);
+  }
+  100% {
+    transform: translateX(0);
+  }
 }
 
 /* Enhanced placeholder styling */
@@ -773,6 +920,28 @@
 
 .wayfinder-loading-indicator svg {
   animation: spin 1s linear infinite;
+}
+
+.wayfinder-loading-indicator.error {
+  background: rgba(255, 59, 48, 0.1);
+  border: 1px solid rgba(255, 59, 48, 0.3);
+  color: #ff3b30;
+}
+
+.wayfinder-loading-indicator .error-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+
+.wayfinder-loading-indicator .error-message {
+  font-weight: 500;
+}
+
+.wayfinder-loading-indicator .error-details {
+  font-size: 0.75rem;
+  opacity: 0.8;
 }
 
 @keyframes fadeInUp {

@@ -5,34 +5,50 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Development Commands
 
 ### Core Commands
+
 - `npm run dev` - Start local development server with Vite
 - `npm run build` - TypeScript compilation + production build (outputs to /dist)
 - `npm run preview` - Preview production build locally
+- `npm run clean` - Remove dist folder and Vite cache
 
 ### Testing Commands
+
 - `npm test` - Run tests in watch mode
 - `npm run test:run` - Run tests once
 - `npm run test:coverage` - Run tests with coverage report
 - `npm run test:ui` - Open Vitest UI for interactive testing
+- Run specific test file: `npm test -- src/engine/query.test.ts`
+- Run tests matching pattern: `npm test -- --grep="date conversion"`
+
+### Code Quality Commands
+
+- `npm run lint` - Check for ESLint errors
+- `npm run lint:fix` - Auto-fix ESLint errors where possible
+- `npm run typecheck` - Check TypeScript types without emitting files
 
 ### Build Requirements
+
 - Build succeeds when `tsc -b && vite build` completes without errors
+- Always run `npm run lint` and `npm run typecheck` before committing
 - Deploy the static /dist folder to Arweave via ArDrive, ArLink, Permaweb Deploy, etc.
 
 ## Architecture Overview
 
 ### Core Application Structure
-**Roam v0.2.0** is a Preact-based PWA for discovering random Arweave content with **AR.IO Wayfinder integration** for verified content delivery. The app uses a shuffle-play interface where users tap "Next" to explore transactions filtered by content type (images, videos, music, websites, text, ArFS files, or everything). Version 0.2.0 introduces **content verification**, **intelligent caching**, **size-aware loading**, and **bandwidth-conscious design** while maintaining the Apple-inspired UI/UX from previous releases.
+
+**Roam v0.3.0** is a Preact-based PWA for discovering random Arweave content with **AR.IO Wayfinder Core 1.0.0 integration** for verified content delivery. The app uses a shuffle-play interface where users tap "Next" to explore transactions filtered by content type (images, videos, music, websites, text, ArFS files, ArNS names, or everything). Version 0.3.0 introduces **ArNS name discovery**, **enhanced verification system**, **block height filtering**, and **advanced session analytics** while maintaining the Apple-inspired UI/UX from previous releases.
 
 ### Key Architectural Patterns
 
 **Engine Layer** (`/src/engine/`):
+
 - `query.ts` - GraphQL API calls to Goldsky endpoints for transaction discovery
-- `fetchQueue.ts` - Sliding window-based transaction queue with background refill mechanism  
+- `fetchQueue.ts` - Sliding window-based transaction queue with background refill mechanism
 - `history.ts` - IndexedDB-persisted navigation history using idb-keyval
 
 **Content Discovery Algorithm**:
 The app uses a sophisticated windowing system to efficiently explore Arweave's 1.6M+ blocks:
+
 - "New" content: Slides from recent blocks downward (most recent first)
 - "Old" content: Random windows in blocks 100K-1.6M range
 - Window size: 10K blocks per fetch for optimal GraphQL performance
@@ -40,40 +56,60 @@ The app uses a sophisticated windowing system to efficiently explore Arweave's 1
 
 **Deep Linking System**:
 URL parameters drive content initialization:
+
 - `txid` - Direct transaction link
 - `ownerAddress` - Filter by Arweave address
-- `appName` - Filter by App-Name tag  
+- `appName` - Filter by App-Name tag
 - `minBlock`/`maxBlock` - Custom block range
 - `channel` - Media type filter
 
-**AR.IO Wayfinder Integration (v0.2.0 - Experimental)**:
-- `wayfinder.ts` - AR.IO SDK integration with dynamic gateway routing (disabled by default)
-- `useWayfinderContent.ts` - Content fetching hook with verification event handling
-- `VerificationIndicator.tsx` - Real-time verification status display
-- Content verification via trusted gateways (permagate.io, vilenarios.com)
+**AR.IO Wayfinder Core 1.0.0 Integration (v0.3.0)**:
+
+- `wayfinder/index.ts` - Modular AR.IO SDK integration with separate routing and verification strategies
+- `wayfinder/config.ts` - Enhanced configuration with independent gateway providers
+- `wayfinder/routing.ts` - Gateway routing strategies (balanced, fast, fair share)
+- `wayfinder/verification.ts` - Content verification logic with multi-gateway support
+- `wayfinder/request.ts` - HTTP request handling with retry logic
+- `useWayfinderContent.ts` - Content fetching hook with improved verification event handling
+- `VerificationIndicator.tsx` - Real-time verification status display with multi-gateway support
+- Content verification via top 5 staked gateways dynamically selected by totalDelegatedStake
 - Intelligent caching with TTL and LRU cleanup mechanisms
 - Size-aware loading to respect bandwidth thresholds
 - Race condition-free verification event propagation
-- Requires `VITE_ENABLE_WAYFINDER=true` to activate
+- Telemetry support for anonymous performance metrics (opt-in only, 10% sample rate)
+
+**ArNS Integration (v0.3.0)**:
+
+- `arns.ts` - ArNS name resolution and validation
+- `arns/errors.ts` - ArNS-specific error handling
+- International domain support with punycode decoding
+- Lazy validation for efficient name resolution
 
 **State Management**:
+
 - Custom hook pattern for modular state management
 - Main app state via `useAppState` hook
 - Navigation logic in `useNavigation` hook
 - Deep linking via `useDeepLink` hook
 - Date filtering via `useDateRangeSlider` hook
 - **NEW**: Wayfinder content state via `useWayfinderContent` hook
+- **NEW**: Block height filtering via `useBlockHeightMode` hook
+- **NEW**: Back button state management via `useBackButtonState` hook
 - Local history persisted via IndexedDB
 - URL parsing drives initial state
 
 ### Component Architecture
 
 **Core Components** (`/src/components/`):
+
 - `MediaView.tsx` - Universal content renderer with **Wayfinder integration**, size-aware loading, and verified content display
-- `DetailsDrawer.tsx` - Apple-inspired transaction metadata panel  
+- `DetailsDrawer.tsx` - Apple-inspired transaction metadata panel
 - `DateRangeSlider.tsx` - Advanced date-based filtering with block conversion
 - `TransactionInfo.tsx` - Compact metadata footer with **verification indicator**
 - `VerificationIndicator.tsx` - **NEW**: Real-time content verification status display
+- `BlockHeightPicker.tsx` - **NEW**: Direct block height navigation with visual picker
+- `ErrorBoundary.tsx` - **NEW**: React error boundary for graceful error handling
+- `ProgressRing.tsx` - **NEW**: Circular progress indicator for loading states
 - `ZoomOverlay.tsx` - Full-screen media viewer
 - `Interstitial.tsx` - Advertisement overlay
 - `AppHeader.tsx` - Application header with branding
@@ -84,6 +120,7 @@ URL parameters drive content initialization:
 - `ConsentModal.tsx` - NSFW content consent dialog
 
 **UI/UX Design System (v0.1.0)**:
+
 - **Apple-inspired design language** with glass morphism effects
 - **Dark theme** with orange/red gradient accents (#FF6A00 to #FF00CC)
 - **Floating action menus** for media controls (share, download, open, details)
@@ -92,6 +129,7 @@ URL parameters drive content initialization:
 - **Mobile-first responsive design** with touch-friendly interactions
 
 **Styling System**:
+
 - UnoCSS for utility-first CSS
 - Component-specific CSS files in `/src/styles/` with Apple-inspired aesthetics
 - CSS Grid and Flexbox for responsive layouts
@@ -101,6 +139,7 @@ URL parameters drive content initialization:
 ### Advanced Date Filtering System (v0.1.0)
 
 **Date-to-Block Conversion** (`/src/utils/dateBlockUtils.ts`):
+
 - **Binary search algorithm** for precise date-to-block mapping
 - **GraphQL integration** for efficient block timestamp queries
 - **Intelligent caching** to avoid redundant API calls
@@ -108,6 +147,7 @@ URL parameters drive content initialization:
 - **Range validation** against Arweave blockchain history
 
 **DateRangeSlider Features**:
+
 - Visual calendar date selection
 - Real-time block height conversion and display
 - Validation against Arweave timeline (Genesis: June 2018)
@@ -115,6 +155,7 @@ URL parameters drive content initialization:
 - Integration with main content discovery queue
 
 **Performance Optimizations**:
+
 - Cached binary search results for frequently accessed dates
 - Range queries for better GraphQL efficiency
 - Graceful degradation when exact search fails
@@ -123,15 +164,18 @@ URL parameters drive content initialization:
 ### Content Type System
 
 **Media Types** (defined in `constants.ts`):
+
 - `images` - PNG, JPEG, WebP, GIF
-- `videos` - MP4, WebM  
+- `videos` - MP4, WebM
 - `music` - MP3, WAV with enhanced audio player and wave visualization
 - `websites` - HTML, Arweave manifests
 - `text` - Markdown, PDF with improved readability
 - `arfs` - ArFS file metadata (requires Entity-Type: file)
+- `arns` - ArNS (Arweave Name System) registered names with punycode support
 - `everything` - Union of all above types
 
 **Enhanced Media Handling (v0.1.0)**:
+
 - **Smart loading thresholds** - manual load buttons for large files
 - **Content-specific sizing** - images use max-height, text/websites use fixed containers
 - **Progressive enhancement** based on file size and type
@@ -145,29 +189,39 @@ ArFS media type fetches JSON metadata first, then extracts `dataTxId` for actual
 ### Configuration
 
 **Environment Variables**:
+
 - `VITE_GATEWAYS_GRAPHQL` - Comma-separated GraphQL endpoints (required)
 - `VITE_GATEWAYS_DATA_SOURCE` - Content delivery gateways
 
-**Wayfinder Configuration** (All disabled by default - experimental):
+**Wayfinder Configuration** (Enabled by default):
 
-**In-App Configuration UI**: All Wayfinder settings can be configured directly in the Channels drawer with:
-- **Real-time validation** - Instant feedback for invalid gateway URLs
-- **Connection monitoring** - Live status indicators for Wayfinder connectivity  
-- **Auto-dependency logic** - Smart enabling/disabling of related features
-- **Visual error feedback** - Red borders and inline messages for validation errors
-- **One-click reset** - Restore all settings to safe defaults
+**Default Settings**:
+- **Master Switch**: Enabled by default for optimal content delivery
+- **Routing Mode**: Balanced (random from top 20 staked gateways)
+- **Verified Browsing**: Disabled by default for performance
+- **Gateway Cache**: 1-hour TTL
+- **Telemetry**: Disabled by default (opt-in only) for privacy
 
-**Environment Variables** (optional - can be overridden by UI):
-- `VITE_ENABLE_WAYFINDER` - Legacy master switch for Wayfinder integration
-- `VITE_WAYFINDER_ENABLE_ROUTING` - Smart gateway selection via AR.IO network
-- `VITE_WAYFINDER_ENABLE_VERIFICATION` - Content verification via cryptographic hashes
-- `VITE_WAYFINDER_GATEWAY_PROVIDER` - Provider type: network, static, simple-cache
-- `VITE_WAYFINDER_GATEWAY_LIMIT` - Maximum gateways for routing (default: 5)
-- `VITE_WAYFINDER_STATIC_GATEWAYS` - Custom gateway list for static provider
-- `VITE_WAYFINDER_CACHE_TIMEOUT` - Gateway cache TTL in minutes (default: 1)
-- `VITE_WAYFINDER_VERIFICATION_STRATEGY` - Verification method: hash, none
-- `VITE_WAYFINDER_TRUSTED_GATEWAYS` - Gateways for hash verification
-- `VITE_WAYFINDER_VERIFICATION_TIMEOUT` - Verification timeout in milliseconds
+**In-App Configuration UI**: All Wayfinder settings are configured directly in the Channels drawer:
+
+- **Enable/Disable Toggle** - Master switch for Wayfinder
+- **Routing Mode Selection** - Balanced, Fast, or Fair Share
+- **Verified Browsing Toggle** - Optional cryptographic verification
+- **Telemetry Toggle** - Opt-in anonymous performance metrics (10% sample rate)
+- **Advanced Settings** - Custom AO Compute Unit URL
+
+**Telemetry Details** (v0.2.2+):
+- **Privacy-First**: Disabled by default, requires explicit user opt-in
+- **Anonymous Metrics**: Only collects performance data, no personal information
+- **10% Sample Rate**: When enabled, only 10% of requests are tracked
+- **OpenTelemetry Standard**: Industry-standard telemetry collection
+- **Collected Metrics**:
+  - Gateway routing performance (response times, success rates)
+  - Request success/failure rates (no content data)
+  - Aggregate performance metrics (no personal information)
+- **Never Collected**: Transaction IDs, content data, personal information, browsing history
+
+**Note**: Environment variables for Wayfinder configuration are no longer used. All configuration is done through the UI and persisted in localStorage.
 
 **Gateway Configuration**:
 App supports "self" gateway mapping that derives data gateway from current hostname (e.g., `roam_user.ardrive.net` → `ardrive.net`).
@@ -175,6 +229,7 @@ App supports "self" gateway mapping that derives data gateway from current hostn
 ### Key Technical Constraints
 
 **Performance Considerations**:
+
 - Content auto-skips on 404/corruption (404-resistant design)
 - No autoplay for bandwidth conservation
 - Background queue refilling prevents loading delays
@@ -182,6 +237,7 @@ App supports "self" gateway mapping that derives data gateway from current hostn
 - **NEW**: Content-type aware rendering optimizations
 
 **Arweave Integration**:
+
 - Uses public GraphQL APIs (no private keys required)
 - All content fetched client-side
 - Permanent hosting on Arweave blockchain
@@ -189,8 +245,9 @@ App supports "self" gateway mapping that derives data gateway from current hostn
 - **NEW**: Enhanced GraphQL queries for date/block operations
 
 **Mobile-First Design**:
+
 - Touch-friendly navigation with Apple-inspired controls
-- PWA installable on mobile devices  
+- PWA installable on mobile devices
 - Works offline after installation
 - Thumb-friendly single-tap exploration
 - **NEW**: Floating action menus optimized for mobile usage
@@ -198,6 +255,7 @@ App supports "self" gateway mapping that derives data gateway from current hostn
 ### v0.1.3 Feature Additions
 
 **Session Statistics System** (`/src/hooks/useSessionStats.ts`, `/src/components/SessionStats.tsx`):
+
 - Real-time session tracking with comprehensive metrics
 - **localStorage persistence** - stats survive page refreshes and browser restarts
 - Content viewed count, unique creators, content type distribution
@@ -208,6 +266,7 @@ App supports "self" gateway mapping that derives data gateway from current hostn
 - **Proper reset functionality** - completely clears stats and localStorage on reset
 
 **Keyboard Shortcuts System** (`/src/hooks/useKeyboardShortcuts.ts`):
+
 - Complete keyboard navigation for accessibility and power users
 - Navigation: `Space/Enter/→` (next), `Backspace/←` (previous)
 - Actions: `S` (share), `D` (download), `C` (channels), `P` (privacy), `T` (statistics)
@@ -216,6 +275,7 @@ App supports "self" gateway mapping that derives data gateway from current hostn
 - Comprehensive help display in console
 
 **Content Preloading System** (`/src/hooks/usePreloading.ts`):
+
 - Intelligent background preloading for smooth browsing experience
 - Preloads next 2 transactions using `peekNextTransactions` from fetch queue
 - Content-type aware: preloads images and text, skips heavy media for bandwidth
@@ -224,6 +284,7 @@ App supports "self" gateway mapping that derives data gateway from current hostn
 - Reduces perceived loading times significantly
 
 **Reset Confirmation Modal** (`/src/components/ResetConfirmModal.tsx`):
+
 - Safety confirmation before clearing session data and history
 - Apple-inspired modal design with clear visual communication
 - Shows exactly what gets reset: statistics, history, seen content
@@ -232,6 +293,7 @@ App supports "self" gateway mapping that derives data gateway from current hostn
 - Mobile-optimized responsive design
 
 **Media Transition Improvements**:
+
 - Fixed jarring content flashing during navigation
 - Key-based rendering system for smooth transitions
 - Enhanced CSS animations with proper opacity and transform transitions
@@ -242,18 +304,21 @@ App supports "self" gateway mapping that derives data gateway from current hostn
 **Testing Framework**: Vitest with jsdom environment for comprehensive testing
 
 **Test Structure**:
+
 - Unit tests for engine functions (`/src/engine/*.test.ts`)
 - Utility function tests (`/src/utils/*.test.ts`)
 - Test utilities and mocks in `/src/test/utils.ts`
 - Global test setup in `/src/test/setup.ts`
 
 **Engine Test Coverage**:
+
 - `query.test.ts`: GraphQL operations, block height fetching, error handling
 - `history.test.ts`: IndexedDB navigation history, state management
 - `fetchQueue.test.ts`: Transaction queue initialization, filtering, configuration
 - **NEW**: `dateBlockUtils.test.ts`: Date/block conversion, binary search, caching
 
 **Testing Patterns**:
+
 - Mock external dependencies (fetch, localStorage, idb-keyval, window.location)
 - Use realistic transaction data for consistent testing
 - Focus on business logic rather than UI components
@@ -265,6 +330,7 @@ App supports "self" gateway mapping that derives data gateway from current hostn
 ### v0.1.0 Release Highlights
 
 **Major Features Added**:
+
 - **Advanced date-based filtering** with visual date range selection
 - **Apple-inspired UI redesign** with glass morphism and smooth transitions
 - **Floating action menus** for better space utilization and mobile UX
@@ -274,6 +340,7 @@ App supports "self" gateway mapping that derives data gateway from current hostn
 - **Better text readability** with white backgrounds and proper typography
 
 **Technical Improvements**:
+
 - **Comprehensive code documentation** with detailed comments
 - **Production-ready logging** with debug statements removed
 - **Enhanced error handling** throughout the application
@@ -281,6 +348,7 @@ App supports "self" gateway mapping that derives data gateway from current hostn
 - **Mobile-optimized touch interactions** and responsive design
 
 **User Experience Enhancements**:
+
 - **Smooth content transitions** without glitchy animations
 - **Content-aware sizing** prevents scrolling issues
 - **Progressive loading** for large files with bandwidth consideration
@@ -290,6 +358,7 @@ App supports "self" gateway mapping that derives data gateway from current hostn
 ### v0.2.0 Release Highlights - AR.IO Wayfinder Integration
 
 **Major Features Added**:
+
 - **AR.IO Wayfinder Integration** - Complete integration with AR.IO SDK for verified content delivery
 - **Content Verification System** - Hash-based verification via trusted gateways (permagate.io, vilenarios.com)
 - **Intelligent Content Caching** - TTL and LRU-based caching with verification status sync
@@ -298,13 +367,17 @@ App supports "self" gateway mapping that derives data gateway from current hostn
 - **Dynamic Gateway Routing** - AR.IO network integration with stake-based gateway selection
 
 **Technical Architecture**:
-- **Wayfinder Service** (`/src/services/wayfinder.ts`) - Centralized AR.IO SDK integration
+
+- **Wayfinder Service** (`/src/services/wayfinder/index.ts`) - Modular AR.IO SDK integration with separate modules
+- **Request Handler** (`/src/services/wayfinder/request.ts`) - Smart retry logic with error classification
+- **Verification Manager** (`/src/services/wayfinder/verification.ts`) - Centralized verification state management
 - **Content Hook** (`/src/hooks/useWayfinderContent.ts`) - React hook for verified content fetching
 - **Verification Component** (`/src/components/VerificationIndicator.tsx`) - Real-time verification status
-- **Event-Driven Updates** - Race condition-free verification event propagation
+- **Event-Driven Updates** - Race condition-free verification event propagation with request context tracking
 - **Fallback Mechanisms** - Graceful degradation to direct gateways when Wayfinder unavailable
 
 **Performance Optimizations**:
+
 - **Throttled Cache Cleanup** - Efficient cache management with 5-minute cleanup intervals
 - **Single Content Fetch** - No double-fetching or redundant verification calls
 - **Memory Management** - Proper Object URL lifecycle and cleanup prevention
@@ -312,12 +385,14 @@ App supports "self" gateway mapping that derives data gateway from current hostn
 - **Pre-Registration Event Handling** - Eliminates verification race conditions
 
 **Security & Verification**:
+
 - **Dual Trusted Gateways** - Multiple verification sources for enhanced security
 - **Hash-Based Verification** - Content integrity validation via AR.IO network
 - **Secure Content Delivery** - Verified blobs served through managed Object URLs
 - **No Re-fetching** - Single verified fetch per content item ensures authenticity
 
 **User Experience**:
+
 - **Transparent Verification** - Subtle loading indicators that don't disrupt content flow
 - **Bandwidth Respect** - Large files show manual load buttons before Wayfinder calls
 - **Verification Feedback** - Clear visual indicators (green checkmark, loading spinner, error states)
@@ -325,22 +400,147 @@ App supports "self" gateway mapping that derives data gateway from current hostn
 - **Seamless Fallback** - Invisible fallback to direct gateways maintains user experience
 
 **Size-Aware Loading Thresholds**:
+
 - **Images**: Auto-load up to 25MB, manual load button for larger files
-- **Videos**: Auto-load up to 200MB, manual load button for larger files  
+- **Videos**: Auto-load up to 200MB, manual load button for larger files
 - **Audio**: Auto-load up to 50MB, manual load button for larger files
 - **Text**: Auto-load up to 10MB, manual load button for larger files
 - **Forced Loading**: Manual load buttons trigger verified Wayfinder fetch
 
 **Development Guidelines for Wayfinder**:
+
 - **Event Listener Registration**: Always register before making Wayfinder requests
 - **Verification Status Sync**: Use current status from service, not cached responses
 - **Content Type Handling**: Support all media types with proper Blob processing
 - **Error Handling**: Implement graceful fallbacks for network and verification failures
 - **Memory Management**: Properly cleanup Object URLs and event listeners
 
+### v0.2.1 Release Highlights - Simplified Wayfinder Settings
+
+**Major Features**:
+
+- **Wayfinder Enabled by Default** - AR.IO integration now active out-of-the-box for better content delivery
+- **Simplified Routing Modes** - Three user-friendly options: Balanced, Fast, and Fair Share
+- **Verified Browsing Toggle** - Optional cryptographic content verification for enhanced security
+- **Improved Settings UI** - Clean, mobile-first design with intuitive controls
+- **Dynamic Gateway Selection** - Uses top 5 gateways sorted by totalDelegatedStake for reliability
+
+**Routing Modes Explained**:
+
+- **Balanced (Default)** - Random selection from top 20 staked gateways for optimal load distribution
+- **Fast** - Routes to gateway with fastest ping response for best performance
+- **Fair Share** - Round-robin rotation through top 20 gateways for equal distribution
+
+**Technical Improvements**:
+
+- **Cache-Aware Navigation** - Instant back/forward navigation using cached content
+- **Simplified Configuration** - Removed complex settings in favor of user-friendly options
+- **Smart Defaults** - Pre-configured for optimal performance and network health
+- **Code Cleanup** - Removed unused components (BlockRangeSlider, useRangeSlider)
+- **Type Safety** - Fixed TypeScript issues with NodeJS.Timeout references
+
+**Configuration Changes**:
+
+- Wayfinder now uses `totalDelegatedStake` instead of `operatorStake` for gateway sorting
+- Verification uses top 5 staked gateways dynamically instead of hardcoded trusted gateways
+- Simplified settings hook (`useSimplifiedWayfinderSettings`) replaces complex configuration
+- All settings can be changed in-app with visual feedback and validation
+
+**User Experience**:
+
+- **No Configuration Required** - Works optimally out of the box
+- **Clear Option Descriptions** - Each setting clearly explains its purpose
+- **Mobile-Optimized UI** - Settings designed for touch interfaces
+- **Instant Feedback** - Real-time connection status and validation
+- **Persistent Settings** - User preferences saved across sessions
+
+### v0.3.0 Release Highlights - ArNS Discovery & Wayfinder Core 1.0.0
+
+**Major Features**:
+
+- **ArNS Names Channel** - Discover content through human-readable Arweave Name System names
+- **Wayfinder Core 1.0.0** - Upgraded to latest stable version with enhanced verification
+- **Block Height Filter** - Direct navigation by Arweave block ranges for precise historical exploration
+- **Enhanced Statistics** - Comprehensive session analytics with ArNS metrics and export capabilities
+- **Punycode Support** - International domain names display beautifully (e.g., xn--ol-yja → ñol)
+
+**Technical Architecture**:
+
+- **Modular Wayfinder Service** - Separated routing and verification strategies for optimal performance
+- **ArNS Content Pipeline** - Dedicated processing for ArNS-resolved content with smart URL handling
+- **Independent Gateway Providers** - Routing uses random from top 20, verification uses top 5 by stake
+- **Enhanced Error Classification** - Better error handling with specific error types and recovery strategies
+- **Improved Queue Management** - Fixed preloading conflicts and ArNS content integration
+
+**ArNS Integration Features**:
+
+- **Human-Readable URLs** - Browse content via names like myapp.arweave.net instead of transaction IDs
+- **Lazy Validation** - Efficient ArNS resolution with background validation
+- **Smart Subdomain Handling** - Proper resolution for web apps and manifests hosted on ArNS
+- **International Support** - Full punycode decoding for international domain names
+- **Fallback Mechanisms** - Graceful handling when ArNS resolution fails
+
+**Performance & Security**:
+
+- **Multi-Gateway Verification** - Content verified against top 5 gateways by totalDelegatedStake
+- **No Double Fetching** - Eliminated redundant network requests in Wayfinder integration
+- **Smart Preloading Pause** - Prevents queue conflicts during UI interactions
+- **Enhanced Caching** - Better TTL management and cache cleanup strategies
+- **Stake-Based Trust** - Dynamic gateway selection based on network stake for maximum security
+
+**User Experience Improvements**:
+
+- **Beautiful ArNS Display** - Clean rendering of international domain names with Unicode support
+- **Enhanced Statistics Modal** - Rich analytics including ArNS content metrics
+- **Block Height Navigation** - Explore specific periods in Arweave history with precision
+- **Consistent Filter UI** - Unified appearance for date and block height pickers
+- **Better Error Messages** - Clear feedback when content fails to load or verify
+
+### v0.3.0 Verification System Improvements
+
+**Major Verification Fixes Implemented**:
+
+- **Request Context Tracking** - All routing events now properly correlate with their transaction IDs
+- **Atomic Status Updates** - Verification status is read once and reused to prevent race conditions
+- **Simplified Timeout Management** - Single, clear timeout strategy without auto-completion logic
+- **Smart Progress Tracking** - Verification waits for explicit completion events, not just 100% progress
+- **Enhanced Error Classification** - Proper error types (Network, Gateway, Timeout, Verification) with specific retry strategies
+- **Final-State Caching** - Content only cached after verification reaches final state (verified/failed/not-verified)
+- **Proper Event Cleanup** - All event listeners and timeouts properly cleaned up on service teardown
+
+**Error Handling Improvements**:
+
+- **Circuit Breaker Pattern** - Failed gateways are temporarily blacklisted (2-minute window)
+- **Error-Specific Delays** - Gateway errors retry immediately (100ms), network errors quickly (200ms)
+- **Verification Error Handling** - Verification failures are final and don't trigger gateway retries
+- **User-Friendly Messages** - Errors include context about retry attempts and failure reasons
+
+### v0.3.0 Content Loading Improvements
+
+**High Priority Fixes Implemented**:
+
+- **ArNS Race Condition Fixed** - Wayfinder initialization now defers until ArNS validation completes, preventing double fetching
+- **Object URL Management** - Implemented reference counting system to prevent memory leaks during rapid navigation
+- **Verification Retry Limits** - Added MAX_VERIFICATION_ATTEMPTS (2) to prevent infinite loops and potential attack vectors
+- **Unified Loading States** - Consolidated multiple loading indicators into single state for better UX
+
+**Memory Management**:
+
+- **ObjectURLManager** - Reference-counted URL management with automatic cleanup
+- **Periodic Cleanup** - Old URLs cleaned up every 30 seconds (>1 minute old)
+- **Proper Release** - URLs released on component unmount and transaction changes
+- **Graceful Delays** - 5-second grace period before cleanup to handle rapid re-acquisition
+
+**Security Enhancements**:
+
+- **Verification Attempt Tracking** - VerificationManager tracks attempts per transaction
+- **Hard Limits** - Maximum 2 verification attempts per content item
+- **Attack Prevention** - Prevents infinite verification loops that could be exploited
+
 ### Development Guidelines
 
 **Code Style**:
+
 - Use comprehensive JSDoc comments for complex functions
 - Remove debug console.log statements before production
 - Follow Apple-inspired design principles for new UI components
@@ -348,13 +548,21 @@ App supports "self" gateway mapping that derives data gateway from current hostn
 - Test date/block conversion functions thoroughly
 
 **Performance**:
+
 - Use content-type specific CSS classes for optimal rendering
 - Implement smart loading thresholds for different media types
 - Cache date/block conversion results to avoid redundant API calls
 - Use GraphQL efficiently with proper pagination and filtering
 
 **Mobile Optimization**:
+
 - Design with touch-first interactions
 - Use floating menus to save vertical space
 - Implement proper responsive breakpoints
 - Test on various mobile devices and screen sizes
+
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.

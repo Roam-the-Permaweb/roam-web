@@ -68,7 +68,9 @@ export const resetMocks = () => {
   
   // Reset fetch mock
   const fetch = global.fetch as any
-  fetch.mockResolvedValue(mockFetchResponse({}))
+  if (fetch && typeof fetch.mockResolvedValue === 'function') {
+    fetch.mockResolvedValue(mockFetchResponse({}))
+  }
   
   // Reset window.location
   window.location.search = ''

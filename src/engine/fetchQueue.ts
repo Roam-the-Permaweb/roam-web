@@ -25,6 +25,8 @@ import { fetchTxsRange, getCurrentBlockHeight, INITIAL_PAGE_LIMIT, REFILL_PAGE_L
 import { logger } from "../utils/logger";
 import { learnFromBlockRange } from "../utils/dateBlockUtils";
 import { get as idbGet, set as idbSet } from "idb-keyval";
+import { arnsService } from "../services/arns";
+import { wayfinderService } from "../services/wayfinder";
 import {
   type TxMeta,
   type Channel,
@@ -93,7 +95,8 @@ const REFILL_THRESHOLD = 3;
 let queue: TxMeta[] = [];
 
 /** Prevent concurrent background refills */
-let isRefilling = false;
+let refillPromise: Promise<any> | null = null;
+
 
 /** Simple mutex for queue operations to prevent race conditions */
 class Mutex {
@@ -207,6 +210,11 @@ async function fetchWindow(
   appName?: string,
   isRefill: boolean = false
 ): Promise<TxMeta[]> {
+  // Special handling for ArNS channel
+  if (media === 'arns') {
+    return fetchArNSWindow(isRefill);
+  }
+  
   const pageLimit = isRefill ? REFILL_PAGE_LIMIT : INITIAL_PAGE_LIMIT;
   const result = await fetchTxsRange(media, min, max, owner, appName, pageLimit, isRefill);
   
@@ -218,9 +226,69 @@ async function fetchWindow(
 }
 
 /**
+ * Fetch and resolve ArNS names to real transactions
+ */
+async function fetchArNSWindow(isRefill: boolean = false): Promise<TxMeta[]> {
+  const transactions: TxMeta[] = [];
+  // For ArNS, balance between efficiency and not overloading
+  const targetCount = isRefill ? 10 : 15; // 10 on refill, 15 on initial load
+  const batchSize = 5; // Resolve 5 names in parallel for better performance
+  
+  logger.info('Fetching and resolving ArNS names...');
+  
+  // Keep trying until we have enough transactions
+  while (transactions.length < targetCount) {
+    // Get a batch of ArNS records
+    const arnsRecords = await arnsService.getMultipleArNSNames(batchSize);
+    
+    if (arnsRecords.length === 0) {
+      logger.warn('No more ArNS names available');
+      break;
+    }
+    
+    // Resolve all records in parallel
+    const resolutionPromises = arnsRecords.map(record => 
+      arnsService.resolveArNSToTransaction(record)
+        .then(tx => ({ record, tx }))
+        .catch(error => {
+          logger.debug(`Failed to resolve ${record.name}:`, error);
+          return { record, tx: null };
+        })
+    );
+    
+    const results = await Promise.all(resolutionPromises);
+    
+    // Add successful resolutions to transactions
+    for (const { record, tx } of results) {
+      if (tx) {
+        transactions.push(tx);
+        logger.debug(`Resolved ArNS name: ${record.name} -> ${tx.id}`);
+      } else {
+        logger.debug(`Skipped unresolved ArNS name: ${record.name}`);
+      }
+    }
+    
+    // If we got very few successful resolutions, increase batch size for next iteration
+    const successRate = results.filter(r => r.tx).length / results.length;
+    if (successRate < 0.5 && transactions.length < targetCount) {
+      logger.debug(`Low success rate (${Math.round(successRate * 100)}%), will try more names`);
+    }
+  }
+  
+  logger.info(`Successfully resolved ${transactions.length} ArNS names`);
+  return transactions;
+}
+
+/**
  * Get next transaction or trigger background refill
  */
-export async function getNextTx(channel: Channel): Promise<TxMeta | null> {
+export async function getNextTx(channel: Channel, recursionDepth: number = 0): Promise<TxMeta | null> {
+  // Prevent infinite recursion for ArFS failures
+  if (recursionDepth > 10) {
+    logger.error(`ArFS recursion limit reached (${recursionDepth}), aborting to prevent infinite loop`);
+    return null;
+  }
+  
   // Use mutex to prevent race conditions
   await queueMutex.acquire();
   
@@ -233,16 +301,20 @@ export async function getNextTx(channel: Channel): Promise<TxMeta | null> {
       await queueMutex.acquire(); // Re-acquire after
     }
 
-    // background refill if below threshold
-    if (queue.length < REFILL_THRESHOLD && !isRefilling) {
-      isRefilling = true;
-      logger.debug("Queue low — background refill");
-      // Don't await - let it run in background
-      initFetchQueue(channel, {}, true) // true = isRefill
+    // background refill if below threshold and not already refilling
+    if (queue.length < REFILL_THRESHOLD && !refillPromise) {
+      logger.debug(`Queue low (${queue.length} items) — starting background refill`);
+      // Store the promise to prevent concurrent refills
+      refillPromise = initFetchQueue(channel, {}, true) // true = isRefill
+        .then(() => {
+          logger.debug(`Background refill completed, queue now has ${queue.length} items`);
+        })
         .catch((e) => logger.warn("Background refill failed", e))
         .finally(() => {
-          isRefilling = false;
+          refillPromise = null; // Clear the promise when done
         });
+    } else if (queue.length < REFILL_THRESHOLD && refillPromise) {
+      logger.debug(`Queue low but refill already in progress, skipping`);
     }
 
     const tx = queue.shift();
@@ -258,14 +330,46 @@ export async function getNextTx(channel: Channel): Promise<TxMeta | null> {
       const entityType = getTagValue(tx.tags, "Entity-Type");
       if (entityType !== "file") {
         logger.debug("Skipping non-ArFS file transaction");
-        queueMutex.release();
-        return getNextTx(channel); // recursively try next
+        // Don't release mutex here - let finally block handle it
+        return getNextTx(channel, recursionDepth + 1); // recursively try next
       }
 
       try {
-        queueMutex.release(); // Release before async operation
-        const response = await fetch(`${GATEWAY_DATA_SOURCE[0]}/${tx.id}`);
-        const metadata = await response.json();
+        // Keep mutex locked during ArFS processing to prevent race conditions
+        
+        logger.debug(`Fetching ArFS metadata for transaction: ${tx.id}`);
+        
+        // Use Wayfinder for ArFS metadata fetching to ensure proper routing and verification
+        const contentResponse = await wayfinderService.getContentUrl({
+          txId: tx.id,
+          contentType: 'application/json',
+          size: tx.data.size
+        });
+        
+        logger.debug(`ArFS content response:`, contentResponse);
+        
+        // For ArFS, we need to fetch the metadata JSON, not use the blob data
+        if (!contentResponse.url) {
+          throw new Error(`No URL returned from Wayfinder for ArFS metadata ${tx.id}`);
+        }
+        
+        logger.debug(`Fetching ArFS metadata from URL: ${contentResponse.url}`);
+        const response = await fetch(contentResponse.url);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const responseText = await response.text();
+        
+        logger.debug(`ArFS content preview: ${responseText.substring(0, 200)}`);
+        
+        // Check if response looks like JSON
+        if (!responseText.trim().startsWith('{') && !responseText.trim().startsWith('[')) {
+          throw new Error(`Expected JSON but got: ${responseText.substring(0, 100)}`);
+        }
+        
+        const metadata = JSON.parse(responseText);
 
         const {
           dataTxId,
@@ -275,6 +379,10 @@ export async function getNextTx(channel: Channel): Promise<TxMeta | null> {
           ...rest
         } = metadata;
 
+        if (!dataTxId || !dataContentType) {
+          throw new Error(`Invalid ArFS metadata: missing dataTxId or dataContentType`);
+        }
+
         tx.arfsMeta = {
           dataTxId,
           name,
@@ -283,9 +391,24 @@ export async function getNextTx(channel: Channel): Promise<TxMeta | null> {
           customTags: rest,
         };
 
+        logger.debug(`Successfully parsed ArFS metadata for ${tx.id}: ${name} (${dataContentType})`);
+
+        // Filter out octet-stream content types that can't be rendered
+        if (dataContentType === 'application/octet-stream') {
+          logger.debug(`Skipping ArFS file with octet-stream content type: ${tx.id}`);
+          return getNextTx(channel, recursionDepth + 1); // Skip to next transaction
+        }
+
       } catch (err) {
-        logger.warn(`Failed to load ArFS metadata for ${tx.id}`, err);
-        return getNextTx(channel); // try next tx
+        logger.error(`Failed to load ArFS metadata for ${tx.id}:`, err);
+        
+        // If we're hitting too many errors, return null to prevent infinite loop
+        if (recursionDepth >= 3) {
+          logger.error(`Too many consecutive ArFS failures (depth: ${recursionDepth}), stopping`);
+          return null;
+        }
+        
+        return getNextTx(channel, recursionDepth + 1); // try next tx
       }
     }
 
@@ -304,30 +427,10 @@ export async function getNextTx(channel: Channel): Promise<TxMeta | null> {
  */
 export function clearSeenIds(): void {
   seenIds.clear();
-  logger.debug("Cleared seen IDs set");
+  arnsService.clearSeenNames();
+  logger.debug("Cleared seen IDs set and ArNS seen names");
 }
 
-/**
- * Peek at next few transactions without consuming them for preloading
- */
-export async function peekNextTransactions(channel: Channel, count: number = 3): Promise<TxMeta[]> {
-  await queueMutex.acquire();
-  
-  try {
-    // If queue is too small, refill first
-    if (queue.length < count) {
-      logger.debug(`Queue has ${queue.length} items, refilling for peek`);
-      queueMutex.release(); // Release before async operation
-      await initFetchQueue(channel);
-      await queueMutex.acquire(); // Re-acquire after
-    }
-    
-    // Return copy of next items without removing them
-    return queue.slice(0, count);
-  } finally {
-    queueMutex.release();
-  }
-}
 
 export async function initFetchQueue(
   channel: Channel,
@@ -471,8 +574,15 @@ export async function initFetchQueue(
   // Update queue with mutex protection
   await queueMutex.acquire();
   try {
-    queue = shuffled;
-    logger.info(`Queue loaded with ${queue.length} txs (shuffled)`);
+    if (isRefill) {
+      // For refills, append to existing queue
+      queue = [...queue, ...shuffled];
+      logger.info(`Queue refilled with ${shuffled.length} new txs (total: ${queue.length})`);
+    } else {
+      // For initial load, replace the queue
+      queue = shuffled;
+      logger.info(`Queue loaded with ${queue.length} txs (shuffled)`);
+    }
   } finally {
     queueMutex.release();
   }
@@ -481,6 +591,7 @@ export async function initFetchQueue(
   if (min > 0 && max > min) {
     learnFromBlockRange(min, max, 0.8);
   }
+
 
   // —— 7) Return the actual window ——
   return { min, max };

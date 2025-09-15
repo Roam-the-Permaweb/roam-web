@@ -1,3 +1,5 @@
+import { Icons } from './Icons'
+
 interface AboutModalProps {
   open: boolean
   onClose: () => void
@@ -28,15 +30,25 @@ export function AboutModal({ open, onClose }: AboutModalProps) {
         <div className="modal-footer">
           <div className="footer-links">
             <a 
+              href="https://x.com/roamthepermaweb" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="footer-link footer-link-text"
+            >
+              X
+            </a>
+            <span className="footer-separator">•</span>
+            <a 
               href="https://github.com/roam-the-permaweb/roam-web" 
               target="_blank" 
               rel="noopener noreferrer"
-              className="footer-link"
+              className="footer-link footer-link-icon"
+              title="View source code on GitHub"
             >
-              GitHub
+              <Icons.Github />
             </a>
             <span className="footer-separator">•</span>
-            <span className="version-info">v0.2.0</span>
+            <span className="version-info">v0.3.0</span>
           </div>
         </div>
       </div>

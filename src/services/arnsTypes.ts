@@ -1,0 +1,28 @@
+/**
+ * ArNS (Arweave Name System) types and interfaces
+ */
+
+export interface ArNSRecord {
+  name: string;
+  processId: string;
+  type: 'lease' | 'permabuy';
+  startTimestamp: number;
+  endTimestamp?: number;
+  undernames: number;
+  purchasePrice?: number;
+}
+
+export interface ArNSMetadata {
+  name: string;
+  resolvedTxId: string;
+  gatewayUrl: string;      // Gateway that resolved this name
+  ttl?: number;
+  validatedAt: number;
+}
+
+export type ArNSSortBy = 'name' | 'processId' | 'endTimestamp' | 'startTimestamp' | 'type' | 'undernameLimit' | 'purchasePrice';
+
+export interface ArNSFetchStrategy {
+  sortBy: ArNSSortBy;
+  sortOrder: 'asc' | 'desc';
+}

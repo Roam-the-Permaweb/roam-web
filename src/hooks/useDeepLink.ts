@@ -32,8 +32,9 @@ export function useDeepLink() {
         
         // Parse txid
         if (params.has('txid')) {
+          const txid = params.get('txid')!
           try {
-            const initialTx = await fetchTxMetaById(params.get('txid')!)
+            const initialTx = await fetchTxMetaById(txid)
             
             // Check if this is an ArFS metadata file
             const entityType = initialTx.tags.find(tag => tag.name === 'Entity-Type')?.value
@@ -61,11 +62,13 @@ export function useDeepLink() {
                 }
                 
               } catch (arfsError) {
+                logger.warn('Failed to parse ArFS metadata from transaction', { txid, error: arfsError })
               }
             }
             
             opts.initialTx = initialTx
           } catch (error) {
+            logger.error('Failed to fetch initial transaction', { txid, error })
           }
         }
         
@@ -104,7 +107,6 @@ export function useDeepLink() {
               ownerAddress: undefined,
               appName: undefined
             }
-          } else {
           }
         } else if (opts.initialTx?.arfsMeta) {
           // Auto-detect ArFS channel if we have ArFS metadata but no explicit channel

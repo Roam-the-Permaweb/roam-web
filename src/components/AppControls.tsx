@@ -6,7 +6,7 @@ interface AppControlsProps {
   onNext: () => void
   onRoam: () => void
   onOpenChannels: () => void
-  hasCurrentTx: boolean
+  canGoBack: boolean
   loading: boolean
   queueLoading: boolean
 }
@@ -17,7 +17,7 @@ export function AppControls({
   onNext, 
   onRoam, 
   onOpenChannels,
-  hasCurrentTx, 
+  canGoBack,
   loading, 
   queueLoading 
 }: AppControlsProps) {
@@ -27,7 +27,7 @@ export function AppControls({
         <RotateCcw size={20} />
       </button>
       
-      <button className="nav-btn secondary" onClick={onBack} disabled={!hasCurrentTx || loading} title="Go back" aria-label="Go back to previous content">
+      <button className="nav-btn secondary" onClick={onBack} disabled={!canGoBack || loading} title="Go back" aria-label="Go back to previous content">
         <ArrowLeft size={20} />
       </button>
       

@@ -160,6 +160,12 @@
   text-decoration: underline;
 }
 
+/* Error text styling */
+.info-value.error-text {
+  color: #ff4444;
+  font-size: 0.75rem;
+}
+
 /* File info specific styling */
 .file-info .info-value {
   font-family: inherit;

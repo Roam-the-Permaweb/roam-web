@@ -7,42 +7,90 @@ export interface VerificationStatus {
   verificationMethod?: string
   error?: string
   timestamp: number
+  progress?: {
+    processedBytes: number
+    totalBytes: number
+    percentage: number
+    stage: 'routing' | 'downloading' | 'verifying'
+  }
 }
 
+
+// Gateway provider configuration types
+export interface NetworkProviderConfig {
+  sortBy: 'operatorStake' | 'totalDelegatedStake'
+  sortOrder: 'asc' | 'desc'
+  limit: number
+}
+
+export interface StaticProviderConfig {
+  gateways: string[]
+}
+
+export interface CacheProviderConfig {
+  cacheTimeoutMinutes: number
+  wrappedProvider: 'network' | 'static'
+  wrappedProviderConfig: NetworkProviderConfig | StaticProviderConfig
+}
+
+export type GatewayProviderConfig = 
+  | { type: 'network'; config: NetworkProviderConfig }
+  | { type: 'static'; config: StaticProviderConfig }
+  | { type: 'simple-cache'; config: CacheProviderConfig }
+
+// Routing strategy configuration types
+export interface RoutingStrategyConfig {
+  strategy: 'random' | 'fastest-ping' | 'round-robin' | 'static' | 'preferred-fallback'
+  // Strategy-specific configs
+  staticGateway?: string         // For static strategy
+  preferredGateway?: string      // For preferred-fallback strategy
+  timeoutMs?: number            // For fastest-ping strategy
+  probePath?: string            // For fastest-ping strategy
+}
+
+// Main configuration structure
 export interface WayfinderConfig {
-  // Master switch
-  enableWayfinder: boolean        // Enable both routing and verification
+  // Master control
+  enableWayfinder: boolean
   
-  // Gateway provider configuration
-  gatewayProvider: 'network' | 'static' | 'simple-cache'
-  gatewayLimit: number           // Max gateways to consider for routing
-  staticGateways: string[]       // Gateway list for static provider
-  cacheTimeoutMinutes: number    // TTL for cached gateway lists
+  // AO Compute Unit configuration (optional)
+  ao?: {
+    cuUrl?: string  // Custom CU URL (default: https://cu.ardrive.io)
+  }
   
-  // Routing configuration
-  routingStrategy: 'random' | 'fastest-ping' | 'round-robin' | 'static' | 'preferred-fallback'
-  staticRoutingGateway?: string  // Gateway URL for static routing strategy
-  preferredGateway?: string      // Preferred gateway for preferred-fallback strategy
-  routingTimeoutMs?: number      // Timeout for ping-based routing strategies
+  // Routing configuration (required when Wayfinder enabled)
+  routing: {
+    gatewayProvider: GatewayProviderConfig
+    strategy: RoutingStrategyConfig
+  }
   
-  // Verification configuration
-  verificationStrategy: 'hash' | 'none'
-  trustedGateways: string[]      // Gateways used for verification hash comparison
-  verificationTimeoutMs: number  // Timeout for verification process
+  // Verification configuration (optional)
+  verification: {
+    enabled: boolean
+    strategy: 'hash' | 'none'
+    gatewayProvider: GatewayProviderConfig
+    timeoutMs: number
+  }
   
-  // AO Configuration
-  aoCuUrl: string                // AO Compute Unit URL for AR.IO SDK
+  // Fallback configuration (when Wayfinder disabled)
+  fallback: {
+    gateways: string[]
+  }
   
-  // Fallback configuration
-  fallbackGateways: string[]     // Direct gateways when Wayfinder unavailable
+  // Telemetry configuration (opt-in only)
+  telemetry: {
+    enabled: boolean      // Default: false (privacy-first)
+    sampleRate: number    // Default: 0.1 (10% when enabled)
+  }
 }
 
 export interface ContentRequest {
-  txId: string
+  txId: string  // Can be transaction ID or full URL (for ArNS content)
   path?: string
   headers?: Record<string, string>
   contentType?: string  // For size-aware loading decisions
   size?: number        // File size for threshold checking
+  preferredGateway?: string  // Gateway to use for ArNS content when verification is off
 }
 
 export interface ContentResponse {
@@ -71,6 +119,7 @@ export type VerificationEventType =
   | 'verification-progress' 
   | 'verification-completed'
   | 'verification-failed'
+  | 'routing-started'
   | 'routing-succeeded'
   | 'routing-failed'
 
@@ -78,7 +127,12 @@ export interface VerificationEvent {
   type: VerificationEventType
   txId: string
   gateway?: string
-  progress?: number
   error?: string
   timestamp: number
+  progress?: {
+    processedBytes: number
+    totalBytes: number
+    percentage: number
+    stage: 'routing' | 'downloading' | 'verifying'
+  }
 }

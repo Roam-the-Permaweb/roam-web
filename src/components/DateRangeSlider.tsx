@@ -237,7 +237,7 @@ export function DateRangeSlider({
         // Update the date without validation - let user type freely
         setTempRange({ ...tempRange, start: newStart })
       }
-    } catch (error) {
+    } catch (_error) {
       // Silently ignore parsing errors while typing
     }
   }
@@ -269,7 +269,7 @@ export function DateRangeSlider({
         // Update the date without validation - let user type freely
         setTempRange({ ...tempRange, end: newEnd })
       }
-    } catch (error) {
+    } catch (_error) {
       // Silently ignore parsing errors while typing
     }
   }
@@ -322,11 +322,9 @@ export function DateRangeSlider({
   now.setUTCHours(0, 0, 0, 0) // Set to start of today for consistency
 
   return (
-    <div className="date-range-picker">
-      <h3 className="date-range-title">Custom Date Range</h3>
-      
+    <div className="date-range-slider">
       <div className="date-inputs">
-        <div className="date-input-wrapper">
+        <div className="date-input-wrapper horizontal">
           <label className="date-input-label">From</label>
           <div className="date-input-with-icon">
             <input
@@ -348,7 +346,7 @@ export function DateRangeSlider({
             />
           </div>
         </div>
-        <div className="date-input-wrapper">
+        <div className="date-input-wrapper horizontal">
           <label className="date-input-label">To</label>
           <div className="date-input-with-icon">
             <input

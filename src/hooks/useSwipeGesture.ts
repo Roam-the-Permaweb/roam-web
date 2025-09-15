@@ -79,5 +79,5 @@ export function useSwipeGesture(
       element.removeEventListener('touchstart', handleTouchStart);
       element.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [elementRef.current, onSwipeLeft, onSwipeRight, threshold, allowedTime]);
+  }, [onSwipeLeft, onSwipeRight, threshold, allowedTime]);
 }

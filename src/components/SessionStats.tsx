@@ -36,6 +36,12 @@ export function SessionStats({ currentTx, open, onClose }: SessionStatsProps) {
     return `${sizeGB.toFixed(2)}GB`
   }
 
+  const getAdFrequency = () => {
+    if (stats.adsViewed === 0 || stats.contentViewed === 0) return 'No ads yet'
+    const frequency = stats.contentViewed / stats.adsViewed
+    return `1 ad per ${Math.round(frequency)} items`
+  }
+
   return (
     <div className="session-stats-overlay" onClick={onClose}>
       <div className="session-stats-panel" onClick={e => e.stopPropagation()}>
@@ -93,24 +99,30 @@ export function SessionStats({ currentTx, open, onClose }: SessionStatsProps) {
               </div>
             </div>
 
-            {/* Content Type Distribution */}
-            <div className="stat-card wide">
-              <div className="stat-header">
-                <Icons.BarChart size={20} />
-                <span>Content Types</span>
+            <div className="stat-card">
+              <div className="stat-icon">
+                <Icons.Zap size={24} />
               </div>
-              <div className="content-types">
-                {Object.entries(stats.contentTypes).map(([type, count]) => (
-                  <div key={type} className="content-type-item">
-                    <span className="content-type-name">{type}</span>
-                    <span className="content-type-count">{count}</span>
-                  </div>
-                ))}
-                {Object.keys(stats.contentTypes).length === 0 && (
-                  <div className="no-data">No content viewed yet</div>
-                )}
+              <div className="stat-info">
+                <div className="stat-value">{stats.adsViewed}</div>
+                <div className="stat-label">Ads Viewed</div>
+                <div className="stat-sublabel">{getAdFrequency()}</div>
               </div>
             </div>
+
+            {/* ArNS Content Stats */}
+            {stats.arnsContentViewed > 0 && (
+              <div className="stat-card">
+                <div className="stat-icon">
+                  <Icons.Globe size={24} />
+                </div>
+                <div className="stat-info">
+                  <div className="stat-value">{stats.uniqueArnsNamesCount}</div>
+                  <div className="stat-label">ArNS Names</div>
+                  <div className="stat-sublabel">{stats.arnsContentViewed} views</div>
+                </div>
+              </div>
+            )}
 
             {/* Favorite Content Type */}
             {stats.favoriteContentType !== 'Unknown' && (
@@ -125,14 +137,24 @@ export function SessionStats({ currentTx, open, onClose }: SessionStatsProps) {
               </div>
             )}
 
-            {/* Content Diversity */}
-            <div className="stat-card">
-              <div className="stat-icon">
-                <Icons.Layers size={24} />
+            {/* Content Type Distribution */}
+            <div className="stat-card wide">
+              <div className="stat-header">
+                <Icons.BarChart size={20} />
+                <span>Content Types</span>
               </div>
-              <div className="stat-info">
-                <div className="stat-value">{stats.contentDiversityPercent}%</div>
-                <div className="stat-label">Content Diversity</div>
+              <div className="content-types">
+                {Object.entries(stats.contentTypes)
+                  .sort((a, b) => b[1] - a[1]) // Sort by count descending
+                  .map(([type, count]) => (
+                  <div key={type} className="content-type-item">
+                    <span className="content-type-name">{type}</span>
+                    <span className="content-type-count">{count}</span>
+                  </div>
+                ))}
+                {Object.keys(stats.contentTypes).length === 0 && (
+                  <div className="no-data">No content viewed yet</div>
+                )}
               </div>
             </div>
 

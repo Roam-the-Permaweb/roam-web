@@ -372,10 +372,10 @@ describe('dateBlockUtils', () => {
       const endDate1 = new Date('2024-03-07T00:00:00.000Z')
       const endDate2 = new Date('2024-03-10T00:00:00.000Z') // Much later date for clear difference
       
-      let fetchCallCount = 0
+      let _fetchCallCount = 0
       let blockFetchCallCount = 0  // Track actual block fetches separately
-      global.fetch = vi.fn().mockImplementation((url: string, options?: any) => {
-        fetchCallCount++
+      global.fetch = vi.fn().mockImplementation((url: string, options?: RequestInit) => {
+        _fetchCallCount++
         
         if (url.includes('/info')) {
           return Promise.resolve({
@@ -672,7 +672,7 @@ describe('dateBlockUtils', () => {
       const maxBlock = 1264154
       
       // Mock block responses with actual timestamps
-      global.fetch = vi.fn().mockImplementation((url: string, options?: any) => {
+      global.fetch = vi.fn().mockImplementation((url: string, options?: RequestInit) => {
         // Handle GraphQL requests
         if (url.includes('/graphql')) {
           const body = JSON.parse(options?.body || '{}')
@@ -974,7 +974,7 @@ describe('dateBlockUtils', () => {
         expect(estimate).toBeGreaterThanOrEqual(expectedRange.min)
         expect(estimate).toBeLessThanOrEqual(expectedRange.max)
         
-        console.log(`Simple estimate for ${date.toISOString()}: ${estimate} (range: ${expectedRange.min}-${expectedRange.max})`)
+        // Simple estimate for ${date.toISOString()}: ${estimate} (range: ${expectedRange.min}-${expectedRange.max})
       })
     })
   })
