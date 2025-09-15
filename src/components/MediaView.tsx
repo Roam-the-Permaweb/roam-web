@@ -32,7 +32,6 @@ import { logger } from '../utils/logger';
 import { objectUrlManager } from '../utils/objectUrlManager';
 import { useWayfinderContent } from '../hooks/useWayfinderContent';
 import { arnsService } from '../services/arns';
-import { getArNSErrorMessage, isRetryableArNSError } from '../services/arns/errors';
 import type { TxMeta } from '../constants';
 import { 
   IMAGE_LOAD_THRESHOLD, 
@@ -56,8 +55,6 @@ export interface MediaViewProps {
   onDownload?: () => void;
   onOpenInNewTab?: () => void;
   onGatewayChange?: (gateway: string | null) => void;
-  onArnsValidated?: (validatedTxMeta: TxMeta) => void;
-  onArnsValidationStateChange?: (isValidating: boolean) => void;
 }
 
 export const MediaView = ({
@@ -70,9 +67,7 @@ export const MediaView = ({
   onShare,
   onDownload,
   onOpenInNewTab,
-  onGatewayChange,
-  onArnsValidated,
-  onArnsValidationStateChange
+  onGatewayChange
 }: MediaViewProps) => {
   const { id, tags } = txMeta;
 
@@ -94,28 +89,9 @@ export const MediaView = ({
   const [mediaLoadError, setMediaLoadError] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
   
-  // ArNS validation state
-  const [arnsValidating, setArnsValidating] = useState(false);
-  const [arnsValidated, setArnsValidated] = useState(!txMeta.needsValidation);
-  const [arnsValidationError, setArnsValidationError] = useState<string | null>(null);
-  const [validatedTxMeta, setValidatedTxMeta] = useState(txMeta);
-  
-  // Determine if we should initialize Wayfinder
-  // For ArNS content, wait until validation is complete to avoid double fetching
-  const shouldInitializeWayfinder = !txMeta.needsValidation || arnsValidated;
-  
   // Use Wayfinder for content URL with size-aware loading
-  const wayfinderContentId = (() => {
-    if (!shouldInitializeWayfinder) {
-      return null; // Don't initialize until ArNS validation is complete
-    }
-    
-    // Use validated transaction metadata if available
-    const currentTxMeta = arnsValidated ? validatedTxMeta : txMeta;
-    const txId = currentTxMeta.arfsMeta?.dataTxId || currentTxMeta.id;
-    
-    return txId;
-  })();
+  // ArNS names are now pre-resolved, so we always have a real transaction ID
+  const wayfinderContentId = txMeta.arfsMeta?.dataTxId || txMeta.id;
   
   const wayfinderResult = useWayfinderContent(
     wayfinderContentId, 
@@ -123,11 +99,11 @@ export const MediaView = ({
     forceLoad, 
     baseContentType, 
     size,
-    validatedTxMeta.arnsGateway || txMeta.arnsGateway,
+    txMeta.arnsGateway,
     retryCount
   );
   
-  // Final content type: prefer Wayfinder's detected type, fallback to base
+  // Use Wayfinder's content type or base content type
   const contentType = wayfinderResult.contentType || baseContentType;
 
   // For manifests and HTML, prefer direct URL to maintain domain context
@@ -138,7 +114,7 @@ export const MediaView = ({
                             contentType === 'application/xhtml+xml';
     
     // Use direct URL for manifests and HTML to preserve domain context for relative paths
-    if (isManifestOrHtml && (txMeta.arnsName || validatedTxMeta.arnsName)) {
+    if (isManifestOrHtml && txMeta.arnsName) {
       return directUrl;
     }
     
@@ -146,11 +122,13 @@ export const MediaView = ({
   };
   
   const directUrl = (() => {
-    // Use validated transaction metadata if available
-    const currentTxMeta = arnsValidated ? validatedTxMeta : txMeta;
+    const currentTxMeta = txMeta;
     
-    // For ArNS content, use subdomain URL format for proper manifest resolution
-    if (currentTxMeta.arnsName && currentTxMeta.arnsGateway) {
+    // For ArNS content that is HTML/manifest, use subdomain URL format for proper manifest resolution
+    if (currentTxMeta.arnsName && currentTxMeta.arnsGateway && 
+        (contentType.startsWith('application/x.arweave-manifest') || 
+         contentType.startsWith('text/html') ||
+         contentType === 'application/xhtml+xml')) {
       const gatewayUrl = new URL(currentTxMeta.arnsGateway);
       // Check if the gateway URL already includes the ArNS subdomain
       if (gatewayUrl.hostname.startsWith(`${currentTxMeta.arnsName}.`)) {
@@ -162,14 +140,7 @@ export const MediaView = ({
       }
     }
     
-    // For unresolved ArNS names (placeholder IDs), use ArNS subdomain format
-    if (currentTxMeta.arnsName && !currentTxMeta.arnsGateway && dataTxId.startsWith('arns:')) {
-      // Use the first gateway for unresolved ArNS names
-      const gateway = new URL(GATEWAY_DATA_SOURCE[0]).hostname;
-      return `https://${currentTxMeta.arnsName}.${gateway}`;
-    }
-    
-    // For regular content, use the standard URL format
+    // For regular content and non-HTML ArNS content, use the standard URL format
     return wayfinderResult.url || `${GATEWAY_DATA_SOURCE[0]}/${dataTxId}`;
   })();
 
@@ -271,118 +242,18 @@ export const MediaView = ({
     }
   }, [wayfinderResult.loading, wayfinderResult.error, wayfinderResult.url, isRetrying]);
 
-  // Reset ArNS validation state when transaction changes
+  // Trigger background metadata enhancement for ArNS content
   useEffect(() => {
-    setArnsValidating(false);
-    setArnsValidated(!txMeta.needsValidation);
-    setArnsValidationError(null);
-    setValidatedTxMeta(txMeta);
-  }, [txMeta.id]);
-
-  // ArNS validation effect - validate on-demand when component loads
-  useEffect(() => {
-    if (txMeta.needsValidation && txMeta.arnsName && !arnsValidated && !arnsValidating) {
-      const validateArnsName = async () => {
-        setArnsValidating(true);
-        setArnsValidationError(null);
-        
-        // Set a timeout to prevent hanging ArNS validation
-        const validationTimeout = setTimeout(() => {
-          setArnsValidating(false);
-          setArnsValidationError('ArNS validation timed out');
-          logger.warn(`ArNS validation timeout for ${txMeta.arnsName}`);
-        }, 10000); // 10 second timeout
-        
-        // Notify parent that validation is starting
-        if (onArnsValidationStateChange) {
-          onArnsValidationStateChange(true);
-        }
-        
-        try {
-          logger.info(`[ArNS Resolution] Resolving ArNS name to transaction ID: ${txMeta.arnsName}`);
-          const resolvedTxId = await arnsService.validateArNSName(txMeta.arnsName!);
-          
-          if (!resolvedTxId) {
-            throw new Error(`Failed to resolve ArNS name: ${txMeta.arnsName}`);
-          }
-          
-          // Fetch transaction metadata for the resolved ID
-          const response = await fetch(`${GATEWAY_DATA_SOURCE[0]}/graphql`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              query: `
-                query GetTransaction($id: ID!) {
-                  transaction(id: $id) {
-                    id
-                    owner { address }
-                    fee { ar }
-                    quantity { ar }
-                    tags { name value }
-                    data { size }
-                    block { height timestamp }
-                    bundledIn { id }
-                  }
-                }
-              `,
-              variables: { id: resolvedTxId }
-            })
-          });
-          
-          const result = await response.json();
-          
-          if (result.data?.transaction) {
-            const tx = result.data.transaction;
-            
-            // Get the gateway URL from the validated metadata
-            const validatedMetadata = arnsService.getValidatedMetadata(txMeta.arnsName!);
-            const gatewayUrl = validatedMetadata?.gatewayUrl || GATEWAY_DATA_SOURCE[0];
-            
-            // Update the transaction metadata with real data
-            const newTxMeta: TxMeta = {
-              ...tx,
-              arnsName: txMeta.arnsName,
-              arnsGateway: gatewayUrl,
-              needsValidation: false
-            };
-            
-            setValidatedTxMeta(newTxMeta);
-            setArnsValidated(true);
-            logger.info(`[ArNS Metadata] Successfully fetched transaction data for ${txMeta.arnsName} (${resolvedTxId})`);
-            
-            // Notify parent component of validated metadata
-            if (onArnsValidated) {
-              onArnsValidated(newTxMeta);
-            }
-          } else {
-            throw new Error(`No transaction data found for resolved ID: ${resolvedTxId}`);
-          }
-        } catch (_error) {
-          logger.error(`ArNS validation failed for ${txMeta.arnsName}:`, _error);
-          
-          // Get user-friendly error message
-          const errorMessage = getArNSErrorMessage(_error);
-          setArnsValidationError(errorMessage);
-          
-          // TODO: If the error is retryable, we could implement retry logic here
-          // For now, just show the error to the user
-          if (isRetryableArNSError(_error)) {
-            logger.info(`ArNS error is retryable for ${txMeta.arnsName}`);
-          }
-        } finally {
-          clearTimeout(validationTimeout);
-          setArnsValidating(false);
-          
-          // Notify parent that validation is complete
-          if (onArnsValidationStateChange) {
-            onArnsValidationStateChange(false);
-          }
-        }
-      };
-      
-      validateArnsName();
+    if (txMeta.arnsName && txMeta.arnsGateway) {
+      // ArNS names are now pre-resolved, but we can still fetch enhanced metadata
+      arnsService.fetchMetadataInBackground(
+        txMeta.arnsName,
+        txMeta.id, // Now always a real transaction ID
+        txMeta.arnsGateway
+      );
     }
-  }, [txMeta.needsValidation, txMeta.arnsName, arnsValidated, arnsValidating]);
+  }, [txMeta.arnsName, txMeta.id, txMeta.arnsGateway]);
+
 
   // Notify parent component when gateway changes
   useEffect(() => {
@@ -414,7 +285,7 @@ export const MediaView = ({
     const isManifestOrHtml = contentType.startsWith('application/x.arweave-manifest') || 
                             contentType.startsWith('text/html') ||
                             contentType === 'application/xhtml+xml';
-    const shouldUseDirectUrl = isManifestOrHtml && (txMeta.arnsName || validatedTxMeta.arnsName);
+    const shouldUseDirectUrl = isManifestOrHtml && txMeta.arnsName;
     
     if (wayfinderResult.data && !wayfinderResult.loading && !shouldUseDirectUrl) {
       // Generate a unique key for this content
@@ -482,7 +353,7 @@ export const MediaView = ({
       }
     }
 
-  }, [wayfinderResult.data, wayfinderResult.loading, contentType, manualLoadText, txMeta.id, txMeta.arnsName, validatedTxMeta.arnsName]);
+  }, [wayfinderResult.data, wayfinderResult.loading, contentType, manualLoadText, txMeta.id, txMeta.arnsName]);
 
   // Iframe fallback detection for manifests and HTML
   useEffect(() => {
@@ -878,32 +749,15 @@ export const MediaView = ({
         {privacyOn && <div className="privacy-screen" />}
         
         {/* Unified loading indicator - show only one loading state at a time */}
-        {(arnsValidating || (!arnsValidationError && !wayfinderResult.error && (wayfinderResult.loading || (!mediaLoaded && !mediaLoadError && !manualLoad && !manualLoadVideo && !manualLoadAudio && !manualLoadText)))) && (
+        {(!wayfinderResult.error && (wayfinderResult.loading || (!mediaLoaded && !mediaLoadError && !manualLoad && !manualLoadVideo && !manualLoadAudio && !manualLoadText))) && (
           <div className="wayfinder-loading-overlay">
             <div className="wayfinder-loading-indicator">
               <Icons.Loading size={16} />
               <span>
-                {arnsValidating 
-                  ? 'Resolving ArNS name...' 
-                  : wayfinderResult.verificationStatus.status === 'verifying' 
-                    ? 'Loading and Verifying content...' 
-                    : 'Loading content...'}
+                {wayfinderResult.verificationStatus.status === 'verifying' 
+                  ? 'Loading and Verifying content...' 
+                  : 'Loading content...'}
               </span>
-            </div>
-          </div>
-        )}
-        
-        {/* ArNS validation error */}
-        {arnsValidationError && (
-          <div className="wayfinder-loading-overlay">
-            <div className="wayfinder-loading-indicator error">
-              <Icons.AlertCircle size={16} />
-              <div className="error-content">
-                <span className="error-message">{arnsValidationError}</span>
-                {txMeta.arnsName && (
-                  <span className="error-details">ArNS name: {txMeta.arnsName}</span>
-                )}
-              </div>
             </div>
           </div>
         )}

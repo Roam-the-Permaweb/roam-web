@@ -95,7 +95,7 @@ const REFILL_THRESHOLD = 3;
 let queue: TxMeta[] = [];
 
 /** Prevent concurrent background refills */
-let isRefilling = false;
+let refillPromise: Promise<any> | null = null;
 
 
 /** Simple mutex for queue operations to prevent race conditions */
@@ -212,7 +212,7 @@ async function fetchWindow(
 ): Promise<TxMeta[]> {
   // Special handling for ArNS channel
   if (media === 'arns') {
-    return fetchArNSWindow();
+    return fetchArNSWindow(isRefill);
   }
   
   const pageLimit = isRefill ? REFILL_PAGE_LIMIT : INITIAL_PAGE_LIMIT;
@@ -226,47 +226,56 @@ async function fetchWindow(
 }
 
 /**
- * Fetch ArNS names without validation (validation happens on-demand)
+ * Fetch and resolve ArNS names to real transactions
  */
-async function fetchArNSWindow(): Promise<TxMeta[]> {
+async function fetchArNSWindow(isRefill: boolean = false): Promise<TxMeta[]> {
   const transactions: TxMeta[] = [];
-  const targetCount = INITIAL_PAGE_LIMIT;
+  // For ArNS, balance between efficiency and not overloading
+  const targetCount = isRefill ? 10 : 15; // 10 on refill, 15 on initial load
+  const batchSize = 5; // Resolve 5 names in parallel for better performance
   
-  logger.info('Fetching ArNS names (no background validation)...');
+  logger.info('Fetching and resolving ArNS names...');
   
-  // Fetch ArNS names without validation - they'll be validated on-demand
+  // Keep trying until we have enough transactions
   while (transactions.length < targetCount) {
-    const arnsRecord = await arnsService.getNextArNSName();
+    // Get a batch of ArNS records
+    const arnsRecords = await arnsService.getMultipleArNSNames(batchSize);
     
-    if (!arnsRecord) {
+    if (arnsRecords.length === 0) {
       logger.warn('No more ArNS names available');
       break;
     }
     
-    // Create a placeholder transaction for the ArNS name
-    // This will be validated and resolved when the user navigates to it
-    const placeholderTx: TxMeta = {
-      id: `arns:${arnsRecord.name}`, // Use a placeholder ID
-      owner: { address: 'arns-placeholder' },
-      fee: { ar: '0' },
-      quantity: { ar: '0' },
-      tags: [
-        { name: 'Content-Type', value: 'text/html' },
-        { name: 'ArNS-Name', value: arnsRecord.name }
-      ],
-      data: { size: 0 },
-      block: { height: 0, timestamp: Date.now() },
-      bundledIn: undefined,
-      arnsName: arnsRecord.name,
-      arnsGateway: undefined, // Will be resolved on-demand
-      needsValidation: true // Flag to indicate this needs validation
-    };
+    // Resolve all records in parallel
+    const resolutionPromises = arnsRecords.map(record => 
+      arnsService.resolveArNSToTransaction(record)
+        .then(tx => ({ record, tx }))
+        .catch(error => {
+          logger.debug(`Failed to resolve ${record.name}:`, error);
+          return { record, tx: null };
+        })
+    );
     
-    transactions.push(placeholderTx);
-    logger.debug(`Added ArNS placeholder: ${arnsRecord.name}`);
+    const results = await Promise.all(resolutionPromises);
+    
+    // Add successful resolutions to transactions
+    for (const { record, tx } of results) {
+      if (tx) {
+        transactions.push(tx);
+        logger.debug(`Resolved ArNS name: ${record.name} -> ${tx.id}`);
+      } else {
+        logger.debug(`Skipped unresolved ArNS name: ${record.name}`);
+      }
+    }
+    
+    // If we got very few successful resolutions, increase batch size for next iteration
+    const successRate = results.filter(r => r.tx).length / results.length;
+    if (successRate < 0.5 && transactions.length < targetCount) {
+      logger.debug(`Low success rate (${Math.round(successRate * 100)}%), will try more names`);
+    }
   }
   
-  logger.info(`Fetched ${transactions.length} ArNS names (validation on-demand)`);
+  logger.info(`Successfully resolved ${transactions.length} ArNS names`);
   return transactions;
 }
 
@@ -292,16 +301,20 @@ export async function getNextTx(channel: Channel, recursionDepth: number = 0): P
       await queueMutex.acquire(); // Re-acquire after
     }
 
-    // background refill if below threshold
-    if (queue.length < REFILL_THRESHOLD && !isRefilling) {
-      isRefilling = true;
-      logger.debug("Queue low — background refill");
-      // Don't await - let it run in background
-      initFetchQueue(channel, {}, true) // true = isRefill
+    // background refill if below threshold and not already refilling
+    if (queue.length < REFILL_THRESHOLD && !refillPromise) {
+      logger.debug(`Queue low (${queue.length} items) — starting background refill`);
+      // Store the promise to prevent concurrent refills
+      refillPromise = initFetchQueue(channel, {}, true) // true = isRefill
+        .then(() => {
+          logger.debug(`Background refill completed, queue now has ${queue.length} items`);
+        })
         .catch((e) => logger.warn("Background refill failed", e))
         .finally(() => {
-          isRefilling = false;
+          refillPromise = null; // Clear the promise when done
         });
+    } else if (queue.length < REFILL_THRESHOLD && refillPromise) {
+      logger.debug(`Queue low but refill already in progress, skipping`);
     }
 
     const tx = queue.shift();
@@ -561,8 +574,15 @@ export async function initFetchQueue(
   // Update queue with mutex protection
   await queueMutex.acquire();
   try {
-    queue = shuffled;
-    logger.info(`Queue loaded with ${queue.length} txs (shuffled)`);
+    if (isRefill) {
+      // For refills, append to existing queue
+      queue = [...queue, ...shuffled];
+      logger.info(`Queue refilled with ${shuffled.length} new txs (total: ${queue.length})`);
+    } else {
+      // For initial load, replace the queue
+      queue = shuffled;
+      logger.info(`Queue loaded with ${queue.length} txs (shuffled)`);
+    }
   } finally {
     queueMutex.release();
   }

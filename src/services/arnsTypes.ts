@@ -20,15 +20,6 @@ export interface ArNSMetadata {
   validatedAt: number;
 }
 
-export interface ArNSPaginatedResponse {
-  items: ArNSRecord[];
-  hasMore: boolean;
-  nextCursor?: string;
-  totalItems: number;
-  sortBy: string;
-  sortOrder: 'asc' | 'desc';
-}
-
 export type ArNSSortBy = 'name' | 'processId' | 'endTimestamp' | 'startTimestamp' | 'type' | 'undernameLimit' | 'purchasePrice';
 
 export interface ArNSFetchStrategy {

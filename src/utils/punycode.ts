@@ -6,63 +6,20 @@
  */
 
 import { logger } from './logger';
-
-// Try to import punycode if available (for Node.js/test environments)
-let punycodeLib: { toUnicode?: (input: string) => string } | undefined;
-try {
-  // Dynamic import for environments that support it
-  if (typeof require !== 'undefined') {
-    punycodeLib = require('punycode/');
-  }
-} catch (_error) {
-  // Punycode not available, will use browser APIs or fallback
-}
+import { toUnicode } from 'punycode/';
 
 /**
- * Decode punycode using the best available method
+ * Decode punycode using the punycode library
  */
 function decodePunycodePart(part: string): string {
-  // First try the punycode library if available (most reliable)
-  if (punycodeLib && punycodeLib.toUnicode) {
-    try {
-      return punycodeLib.toUnicode(part);
-    } catch (_error) {
-      // Fall through to other methods
-    }
+  try {
+    // Use the imported punycode library to decode
+    return toUnicode(part);
+  } catch (error) {
+    // If decoding fails, return the original
+    logger.debug(`Failed to decode punycode part: ${part}`, error);
+    return part;
   }
-  
-  // In browser environment, try using URL API
-  if (typeof URL !== 'undefined') {
-    try {
-      // Create a full URL with the punycode part as subdomain
-      const url = new URL(`https://${part}.example.com`);
-      const decoded = url.hostname.split('.')[0];
-      
-      // Check if it was actually decoded
-      if (!decoded.toLowerCase().startsWith('xn--')) {
-        return decoded;
-      }
-    } catch (_error) {
-      // URL API failed, continue to fallback
-    }
-  }
-  
-  // Manual fallback for common cases
-  const commonMappings: Record<string, string> = {
-    'xn--ol-yja': 'ñol',
-    'xn--9ca': 'é',
-    'xn--8ca': 'è',
-    'xn--7ba': 'ç',
-    'xn--1ca': 'à',
-    'xn--4ca': 'ä',
-    'xn--tda': 'ö',
-    'xn--sda': 'ü',
-    'xn--0ca': 'Ñ',
-    'xn--ls8h': '💩',
-    'xn--ihqwcrb4cv8a8dqg056pqjye': '他们为什么不说中文'
-  };
-  
-  return commonMappings[part.toLowerCase()] || part;
 }
 
 /**

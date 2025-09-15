@@ -54,8 +54,9 @@ export interface TxMeta {
     customTags: Record<string, string>;
   };
   arnsName?: string; // The ArNS name that resolved to this content
+  arnsProcessId?: string; // Process that owns the ArNS name
+  arnsResolvedAt?: number; // Timestamp when ArNS was resolved
   arnsGateway?: string; // The gateway that resolved the ArNS name
-  needsValidation?: boolean; // Flag to indicate ArNS name needs on-demand validation
 }
 
 // --------------------------------------------------------------------------

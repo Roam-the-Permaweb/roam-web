@@ -44,6 +44,7 @@ import { logger } from './utils/logger'
 import { objectUrlManager } from './utils/objectUrlManager'
 import { MAX_AD_CLICKS, MIN_AD_CLICKS, DEFAULT_DATE_RANGE_DAYS, APP_SWIPE_THRESHOLD, APP_SWIPE_TIME_LIMIT } from './constants'
 import { wayfinderService } from './services/wayfinder'
+import { arnsService } from './services/arns'
 import './styles/app.css'
 import './styles/channels-drawer.css'
 import './styles/welcome-screen.css'
@@ -156,8 +157,6 @@ export function App() {
     appState.currentTx?.arfsMeta?.dataTxId || appState.currentTx?.id || null
   )
   
-  // Track ArNS validation state
-  const [arnsValidating, setArnsValidating] = useState(false)
   
   // Track back button state
   const canNavigateBack = useBackButtonState(appState.currentTx)
@@ -284,6 +283,40 @@ export function App() {
   }, [appState.media, appState.recency, appState.ownerAddress, appState.appName])
   
   // Date slider is independent - no automatic syncing needed
+  
+  // ArNS metadata enhancement listener
+  useEffect(() => {
+    const handleArNSMetadata = (event: CustomEvent) => {
+      const { arnsName, transaction, gatewayUrl } = event.detail;
+      
+      // Check if this metadata is for the current transaction
+      if (appState.currentTx?.arnsName === arnsName) {
+        logger.debug('[ArNS] Enhancing current transaction with background metadata');
+        
+        // Update current transaction with real metadata and resolved gateway
+        const enhancedTx = {
+          ...appState.currentTx,
+          owner: transaction.owner,
+          block: transaction.block,
+          data: transaction.data,
+          tags: transaction.tags,
+          fee: transaction.fee,
+          quantity: transaction.quantity,
+          bundledIn: transaction.bundledIn,
+          arnsGateway: gatewayUrl
+        };
+        
+        appState.setCurrentTx(enhancedTx);
+      }
+    };
+    
+    arnsService.addEventListener('arns-metadata-ready', handleArNSMetadata);
+    
+    return () => {
+      arnsService.removeEventListener('arns-metadata-ready', handleArNSMetadata);
+    };
+  }, [appState.currentTx?.arnsName]);
+  
   
   // Early return if consent rejected
   if (consent.rejected) return null
@@ -474,7 +507,7 @@ export function App() {
         <div className="error">{appState.error}</div>
       ) : null}
 
-      <main ref={mainRef} className={`media-container ${appState.loading || arnsValidating ? 'loading' : ''}`}>
+      <main ref={mainRef} className={`media-container ${appState.loading ? 'loading' : ''}`}>
         {/* Only show full loading screen when no content exists */}
         {(appState.loading || appState.queueLoading) && !appState.currentTx ? (
           <LoadingScreen />
@@ -499,12 +532,6 @@ export function App() {
                 onDetails={() => appState.setDetailsOpen(true)}
                 onOpenInNewTab={handleOpenInNewTab}
                 onGatewayChange={setCurrentGateway}
-                onArnsValidated={(validatedTxMeta) => {
-                  // Update app state with validated ArNS metadata
-                  logger.info('[ArNS Metadata] Updating app state with resolved transaction metadata');
-                  appState.setCurrentTx(validatedTxMeta);
-                }}
-                onArnsValidationStateChange={setArnsValidating}
               />
             </MediaViewErrorBoundary>
 
@@ -537,7 +564,7 @@ export function App() {
           appState.openChannels()
         }}
         canGoBack={canNavigateBack}
-        loading={appState.loading || arnsValidating}
+        loading={appState.loading}
         queueLoading={appState.queueLoading}
       />
 

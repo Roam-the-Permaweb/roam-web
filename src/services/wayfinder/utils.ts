@@ -91,9 +91,34 @@ export function createGatewayUrl(gateway: string, txId: string, path?: string): 
 
 /**
  * Determines if a URL is an ArNS URL
+ * This is a fallback - prefer the version in utils/arnsUtils.ts
  */
 export function isArNSUrl(url: string): boolean {
-  return url.startsWith('http://') || url.startsWith('https://');
+  // Simple check for ArNS patterns - this is a fallback implementation
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    return false;
+  }
+  
+  try {
+    const hostname = new URL(url).hostname;
+    const parts = hostname.split('.');
+    
+    // Check if it matches known ArNS gateway patterns or placeholder
+    if (parts.length >= 3) {
+      const domain = parts.slice(1).join('.');
+      return domain.includes('arweave.net') || 
+             domain.includes('ar-io.dev') ||
+             domain.includes('ar.io') ||
+             domain.includes('permaweb.dev') ||
+             domain.includes('ardrive.io') ||
+             domain.includes('g8way.io') ||
+             domain === 'placeholder'; // Our placeholder format
+    }
+    
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 /**

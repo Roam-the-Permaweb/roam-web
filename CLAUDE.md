@@ -9,6 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run dev` - Start local development server with Vite
 - `npm run build` - TypeScript compilation + production build (outputs to /dist)
 - `npm run preview` - Preview production build locally
+- `npm run clean` - Remove dist folder and Vite cache
 
 ### Testing Commands
 
@@ -16,17 +17,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run test:run` - Run tests once
 - `npm run test:coverage` - Run tests with coverage report
 - `npm run test:ui` - Open Vitest UI for interactive testing
+- Run specific test file: `npm test -- src/engine/query.test.ts`
+- Run tests matching pattern: `npm test -- --grep="date conversion"`
+
+### Code Quality Commands
+
+- `npm run lint` - Check for ESLint errors
+- `npm run lint:fix` - Auto-fix ESLint errors where possible
+- `npm run typecheck` - Check TypeScript types without emitting files
 
 ### Build Requirements
 
 - Build succeeds when `tsc -b && vite build` completes without errors
+- Always run `npm run lint` and `npm run typecheck` before committing
 - Deploy the static /dist folder to Arweave via ArDrive, ArLink, Permaweb Deploy, etc.
 
 ## Architecture Overview
 
 ### Core Application Structure
 
-**Roam v0.2.0** is a Preact-based PWA for discovering random Arweave content with **AR.IO Wayfinder integration** for verified content delivery. The app uses a shuffle-play interface where users tap "Next" to explore transactions filtered by content type (images, videos, music, websites, text, ArFS files, or everything). Version 0.2.0 introduces **content verification**, **intelligent caching**, **size-aware loading**, and **bandwidth-conscious design** while maintaining the Apple-inspired UI/UX from previous releases.
+**Roam v0.3.0** is a Preact-based PWA for discovering random Arweave content with **AR.IO Wayfinder Core 1.0.0 integration** for verified content delivery. The app uses a shuffle-play interface where users tap "Next" to explore transactions filtered by content type (images, videos, music, websites, text, ArFS files, ArNS names, or everything). Version 0.3.0 introduces **ArNS name discovery**, **enhanced verification system**, **block height filtering**, and **advanced session analytics** while maintaining the Apple-inspired UI/UX from previous releases.
 
 ### Key Architectural Patterns
 
@@ -53,16 +63,27 @@ URL parameters drive content initialization:
 - `minBlock`/`maxBlock` - Custom block range
 - `channel` - Media type filter
 
-**AR.IO Wayfinder Integration (v0.2.0)**:
+**AR.IO Wayfinder Core 1.0.0 Integration (v0.3.0)**:
 
-- `wayfinder.ts` - AR.IO SDK integration with dynamic gateway routing (enabled by default)
-- `useWayfinderContent.ts` - Content fetching hook with verification event handling
-- `VerificationIndicator.tsx` - Real-time verification status display
-- Content verification via top 5 staked gateways (when enabled)
+- `wayfinder/index.ts` - Modular AR.IO SDK integration with separate routing and verification strategies
+- `wayfinder/config.ts` - Enhanced configuration with independent gateway providers
+- `wayfinder/routing.ts` - Gateway routing strategies (balanced, fast, fair share)
+- `wayfinder/verification.ts` - Content verification logic with multi-gateway support
+- `wayfinder/request.ts` - HTTP request handling with retry logic
+- `useWayfinderContent.ts` - Content fetching hook with improved verification event handling
+- `VerificationIndicator.tsx` - Real-time verification status display with multi-gateway support
+- Content verification via top 5 staked gateways dynamically selected by totalDelegatedStake
 - Intelligent caching with TTL and LRU cleanup mechanisms
 - Size-aware loading to respect bandwidth thresholds
 - Race condition-free verification event propagation
-- Telemetry support for anonymous performance metrics (opt-in only)
+- Telemetry support for anonymous performance metrics (opt-in only, 10% sample rate)
+
+**ArNS Integration (v0.3.0)**:
+
+- `arns.ts` - ArNS name resolution and validation
+- `arns/errors.ts` - ArNS-specific error handling
+- International domain support with punycode decoding
+- Lazy validation for efficient name resolution
 
 **State Management**:
 
@@ -72,6 +93,8 @@ URL parameters drive content initialization:
 - Deep linking via `useDeepLink` hook
 - Date filtering via `useDateRangeSlider` hook
 - **NEW**: Wayfinder content state via `useWayfinderContent` hook
+- **NEW**: Block height filtering via `useBlockHeightMode` hook
+- **NEW**: Back button state management via `useBackButtonState` hook
 - Local history persisted via IndexedDB
 - URL parsing drives initial state
 
@@ -84,6 +107,9 @@ URL parameters drive content initialization:
 - `DateRangeSlider.tsx` - Advanced date-based filtering with block conversion
 - `TransactionInfo.tsx` - Compact metadata footer with **verification indicator**
 - `VerificationIndicator.tsx` - **NEW**: Real-time content verification status display
+- `BlockHeightPicker.tsx` - **NEW**: Direct block height navigation with visual picker
+- `ErrorBoundary.tsx` - **NEW**: React error boundary for graceful error handling
+- `ProgressRing.tsx` - **NEW**: Circular progress indicator for loading states
 - `ZoomOverlay.tsx` - Full-screen media viewer
 - `Interstitial.tsx` - Advertisement overlay
 - `AppHeader.tsx` - Application header with branding
@@ -145,6 +171,7 @@ URL parameters drive content initialization:
 - `websites` - HTML, Arweave manifests
 - `text` - Markdown, PDF with improved readability
 - `arfs` - ArFS file metadata (requires Entity-Type: file)
+- `arns` - ArNS (Arweave Name System) registered names with punycode support
 - `everything` - Union of all above types
 
 **Enhanced Media Handling (v0.1.0)**:
@@ -341,10 +368,12 @@ App supports "self" gateway mapping that derives data gateway from current hostn
 
 **Technical Architecture**:
 
-- **Wayfinder Service** (`/src/services/wayfinder.ts`) - Centralized AR.IO SDK integration
+- **Wayfinder Service** (`/src/services/wayfinder/index.ts`) - Modular AR.IO SDK integration with separate modules
+- **Request Handler** (`/src/services/wayfinder/request.ts`) - Smart retry logic with error classification
+- **Verification Manager** (`/src/services/wayfinder/verification.ts`) - Centralized verification state management
 - **Content Hook** (`/src/hooks/useWayfinderContent.ts`) - React hook for verified content fetching
 - **Verification Component** (`/src/components/VerificationIndicator.tsx`) - Real-time verification status
-- **Event-Driven Updates** - Race condition-free verification event propagation
+- **Event-Driven Updates** - Race condition-free verification event propagation with request context tracking
 - **Fallback Mechanisms** - Graceful degradation to direct gateways when Wayfinder unavailable
 
 **Performance Optimizations**:
@@ -425,6 +454,89 @@ App supports "self" gateway mapping that derives data gateway from current hostn
 - **Instant Feedback** - Real-time connection status and validation
 - **Persistent Settings** - User preferences saved across sessions
 
+### v0.3.0 Release Highlights - ArNS Discovery & Wayfinder Core 1.0.0
+
+**Major Features**:
+
+- **ArNS Names Channel** - Discover content through human-readable Arweave Name System names
+- **Wayfinder Core 1.0.0** - Upgraded to latest stable version with enhanced verification
+- **Block Height Filter** - Direct navigation by Arweave block ranges for precise historical exploration
+- **Enhanced Statistics** - Comprehensive session analytics with ArNS metrics and export capabilities
+- **Punycode Support** - International domain names display beautifully (e.g., xn--ol-yja → ñol)
+
+**Technical Architecture**:
+
+- **Modular Wayfinder Service** - Separated routing and verification strategies for optimal performance
+- **ArNS Content Pipeline** - Dedicated processing for ArNS-resolved content with smart URL handling
+- **Independent Gateway Providers** - Routing uses random from top 20, verification uses top 5 by stake
+- **Enhanced Error Classification** - Better error handling with specific error types and recovery strategies
+- **Improved Queue Management** - Fixed preloading conflicts and ArNS content integration
+
+**ArNS Integration Features**:
+
+- **Human-Readable URLs** - Browse content via names like myapp.arweave.net instead of transaction IDs
+- **Lazy Validation** - Efficient ArNS resolution with background validation
+- **Smart Subdomain Handling** - Proper resolution for web apps and manifests hosted on ArNS
+- **International Support** - Full punycode decoding for international domain names
+- **Fallback Mechanisms** - Graceful handling when ArNS resolution fails
+
+**Performance & Security**:
+
+- **Multi-Gateway Verification** - Content verified against top 5 gateways by totalDelegatedStake
+- **No Double Fetching** - Eliminated redundant network requests in Wayfinder integration
+- **Smart Preloading Pause** - Prevents queue conflicts during UI interactions
+- **Enhanced Caching** - Better TTL management and cache cleanup strategies
+- **Stake-Based Trust** - Dynamic gateway selection based on network stake for maximum security
+
+**User Experience Improvements**:
+
+- **Beautiful ArNS Display** - Clean rendering of international domain names with Unicode support
+- **Enhanced Statistics Modal** - Rich analytics including ArNS content metrics
+- **Block Height Navigation** - Explore specific periods in Arweave history with precision
+- **Consistent Filter UI** - Unified appearance for date and block height pickers
+- **Better Error Messages** - Clear feedback when content fails to load or verify
+
+### v0.3.0 Verification System Improvements
+
+**Major Verification Fixes Implemented**:
+
+- **Request Context Tracking** - All routing events now properly correlate with their transaction IDs
+- **Atomic Status Updates** - Verification status is read once and reused to prevent race conditions
+- **Simplified Timeout Management** - Single, clear timeout strategy without auto-completion logic
+- **Smart Progress Tracking** - Verification waits for explicit completion events, not just 100% progress
+- **Enhanced Error Classification** - Proper error types (Network, Gateway, Timeout, Verification) with specific retry strategies
+- **Final-State Caching** - Content only cached after verification reaches final state (verified/failed/not-verified)
+- **Proper Event Cleanup** - All event listeners and timeouts properly cleaned up on service teardown
+
+**Error Handling Improvements**:
+
+- **Circuit Breaker Pattern** - Failed gateways are temporarily blacklisted (2-minute window)
+- **Error-Specific Delays** - Gateway errors retry immediately (100ms), network errors quickly (200ms)
+- **Verification Error Handling** - Verification failures are final and don't trigger gateway retries
+- **User-Friendly Messages** - Errors include context about retry attempts and failure reasons
+
+### v0.3.0 Content Loading Improvements
+
+**High Priority Fixes Implemented**:
+
+- **ArNS Race Condition Fixed** - Wayfinder initialization now defers until ArNS validation completes, preventing double fetching
+- **Object URL Management** - Implemented reference counting system to prevent memory leaks during rapid navigation
+- **Verification Retry Limits** - Added MAX_VERIFICATION_ATTEMPTS (2) to prevent infinite loops and potential attack vectors
+- **Unified Loading States** - Consolidated multiple loading indicators into single state for better UX
+
+**Memory Management**:
+
+- **ObjectURLManager** - Reference-counted URL management with automatic cleanup
+- **Periodic Cleanup** - Old URLs cleaned up every 30 seconds (>1 minute old)
+- **Proper Release** - URLs released on component unmount and transaction changes
+- **Graceful Delays** - 5-second grace period before cleanup to handle rapid re-acquisition
+
+**Security Enhancements**:
+
+- **Verification Attempt Tracking** - VerificationManager tracks attempts per transaction
+- **Hard Limits** - Maximum 2 verification attempts per content item
+- **Attack Prevention** - Prevents infinite verification loops that could be exploited
+
 ### Development Guidelines
 
 **Code Style**:
@@ -448,3 +560,9 @@ App supports "self" gateway mapping that derives data gateway from current hostn
 - Use floating menus to save vertical space
 - Implement proper responsive breakpoints
 - Test on various mobile devices and screen sizes
+
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
