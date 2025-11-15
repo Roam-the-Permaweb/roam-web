@@ -185,7 +185,7 @@ Create a `.env.local` file for custom gateway and Wayfinder configuration:
 
 ```bash
 # GraphQL endpoints (required)
-VITE_GATEWAYS_GRAPHQL=https://goldsky-arweave-api.com/graphql,https://arweave-search.goldsky.com/graphql
+VITE_GATEWAYS_GRAPHQL=https://goldsky-arweave-api.com,https://arweave-search.goldsky.com
 
 # Data gateways (optional - defaults to arweave.net)
 VITE_GATEWAYS_DATA_SOURCE=https://arweave.net,https://ar-io.net,self

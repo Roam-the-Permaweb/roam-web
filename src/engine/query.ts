@@ -5,7 +5,7 @@ import { CONTENT_TYPES, APP_OWNERS, type MediaType, type TxMeta } from "../const
 // Configuration & Constants
 // --------------------------------------------------------------------------
 export const GATEWAYS_GRAPHQL =
-  import.meta.env.VITE_GATEWAYS_GRAPHQL?.split(",") ?? ['https://arweave-search.goldsky.com/graphql'];
+  import.meta.env.VITE_GATEWAYS_GRAPHQL?.split(",") ?? ['https://arweave-search.goldsky.com'];
 const PAGE_SIZE = 100;
 export const DEFAULT_HEIGHT = 1666042;
 
