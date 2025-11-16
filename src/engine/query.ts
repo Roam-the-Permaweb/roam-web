@@ -115,7 +115,7 @@ async function fetchWithRetry(
       // Apply rate limiting
       await rateLimiter.waitIfNeeded();
       
-      const res = await fetch(`${gw}/graphql`, payload);
+      const res = await fetch(`${gw}`, payload);
       
       // Don't retry on client errors (4xx)
       if (res.status >= 400 && res.status < 500) {

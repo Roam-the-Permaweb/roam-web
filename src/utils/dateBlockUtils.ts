@@ -382,7 +382,7 @@ async function fetchBlocksRange(minHeight: number, maxHeight: number): Promise<{
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout for range queries
       
-      const response = await fetch(`${gw}/graphql`, {
+      const response = await fetch(`${gw}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -488,7 +488,7 @@ async function fetchBlockInfo(height: number): Promise<{ height: number; timesta
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 3000)
       
-      const response = await fetch(`${gw}/graphql`, {
+      const response = await fetch(`${gw}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
