@@ -22,7 +22,7 @@ export function AppFooter({ onOpenAbout }: AppFooterProps) {
           GitHub
         </a>
         <span className="footer-separator">•</span>
-        <span className="footer-item footer-version">v0.2.0</span>
+        <span className="footer-item footer-version">v0.2.1</span>
       </div>
     </footer>
   )
